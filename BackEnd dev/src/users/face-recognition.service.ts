@@ -29,11 +29,7 @@ export class FaceRecognitionService implements OnModuleInit {
 
     async onModuleInit() {
         try {
-            console.log('Initializing TensorFlow...');
             await tf.ready();
-            console.log('TensorFlow initialized');
-
-            console.log('Loading face-api models from:', this.modelPath);
             
             await Promise.all([
                 faceapi.nets.ssdMobilenetv1.loadFromDisk(this.modelPath),
@@ -41,7 +37,6 @@ export class FaceRecognitionService implements OnModuleInit {
                 faceapi.nets.faceRecognitionNet.loadFromDisk(this.modelPath)
             ]);
             
-            console.log('All models loaded successfully');
         } catch (error) {
             console.error('Error initializing face recognition:', error);
             throw new Error(`Failed to initialize face recognition: ${error.message}`);

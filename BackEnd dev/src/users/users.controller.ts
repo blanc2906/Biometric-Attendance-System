@@ -115,29 +115,26 @@ export class UsersController {
       this.logger.error(`Error creating user: ${error.message}`);
     }
   }
-
-  @Post(':id/face')
+  @Post(':id/add-face')
+  @UseInterceptors(FileInterceptor('image'))
   async addFace(
-    @Param('id') id: string,
-    @Body() faceRecognitionDto: FaceRecognitionDto
-  ) {
-    try {
-      console.log(`Processing face addition for user ${id}`);
-      console.log('Image path:', faceRecognitionDto.imagePath);
-      
-      const result = await this.faceRecognitionService.addFaceDescriptor(
-        +id,
-        faceRecognitionDto.imagePath
-      );
-      
-      console.log('Face addition result:', result);
-      
+    @UploadedFile() file : Express.Multer.File,
+    @Param('id') id: string
+  ){
+    try{
+      const tempPath = path.join(process.cwd(), 'temporary', `temp-${Date.now()}.jpg`);
+      fs.writeFileSync(tempPath, file.buffer);
+
+      const addedUser = await this.faceRecognitionService.addFaceDescriptor(+id,tempPath);
+      fs.unlinkSync(tempPath);
+
       return {
         success: true,
         message: 'Face descriptor added successfully',
-        data: result
+        data: addedUser
       };
-    } catch (error) {
+    }
+    catch(error){
       console.error('Full error:', error);
       this.logger.error(`Error adding face: ${error.message}`);
       throw new HttpException({

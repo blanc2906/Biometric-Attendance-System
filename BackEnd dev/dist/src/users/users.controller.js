@@ -19,7 +19,6 @@ const users_service_1 = require("./users.service");
 const microservices_1 = require("@nestjs/microservices");
 const user_log_entity_1 = require("./entities/user_log.entity");
 const face_recognition_service_1 = require("./face-recognition.service");
-const face_recognition_dto_1 = require("./dto/face-recognition.dto");
 const fs = require("fs");
 const path = require("path");
 const platform_express_1 = require("@nestjs/platform-express");
@@ -102,16 +101,16 @@ let UsersController = UsersController_1 = class UsersController {
             this.logger.error(`Error creating user: ${error.message}`);
         }
     }
-    async addFace(id, faceRecognitionDto) {
+    async addFace(file, id) {
         try {
-            console.log(`Processing face addition for user ${id}`);
-            console.log('Image path:', faceRecognitionDto.imagePath);
-            const result = await this.faceRecognitionService.addFaceDescriptor(+id, faceRecognitionDto.imagePath);
-            console.log('Face addition result:', result);
+            const tempPath = path.join(process.cwd(), 'temporary', `temp-${Date.now()}.jpg`);
+            fs.writeFileSync(tempPath, file.buffer);
+            const addedUser = await this.faceRecognitionService.addFaceDescriptor(+id, tempPath);
+            fs.unlinkSync(tempPath);
             return {
                 success: true,
                 message: 'Face descriptor added successfully',
-                data: result
+                data: addedUser
             };
         }
         catch (error) {
@@ -195,11 +194,12 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "createUser", null);
 __decorate([
-    (0, common_1.Post)(':id/face'),
-    __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Body)()),
+    (0, common_1.Post)(':id/add-face'),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('image')),
+    __param(0, (0, common_1.UploadedFile)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, face_recognition_dto_1.FaceRecognitionDto]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "addFace", null);
 __decorate([

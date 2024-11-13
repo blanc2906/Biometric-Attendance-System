@@ -34,16 +34,12 @@ let FaceRecognitionService = class FaceRecognitionService {
     }
     async onModuleInit() {
         try {
-            console.log('Initializing TensorFlow...');
             await tf.ready();
-            console.log('TensorFlow initialized');
-            console.log('Loading face-api models from:', this.modelPath);
             await Promise.all([
                 faceapi.nets.ssdMobilenetv1.loadFromDisk(this.modelPath),
                 faceapi.nets.faceLandmark68Net.loadFromDisk(this.modelPath),
                 faceapi.nets.faceRecognitionNet.loadFromDisk(this.modelPath)
             ]);
-            console.log('All models loaded successfully');
         }
         catch (error) {
             console.error('Error initializing face recognition:', error);
