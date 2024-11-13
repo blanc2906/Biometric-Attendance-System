@@ -20,6 +20,9 @@ const microservices_1 = require("@nestjs/microservices");
 const user_log_entity_1 = require("./entities/user_log.entity");
 const face_recognition_service_1 = require("./face-recognition.service");
 const face_recognition_dto_1 = require("./dto/face-recognition.dto");
+const fs = require("fs");
+const path = require("path");
+const platform_express_1 = require("@nestjs/platform-express");
 let UsersController = UsersController_1 = class UsersController {
     constructor(usersService, faceRecognitionService) {
         this.usersService = usersService;
@@ -121,17 +124,31 @@ let UsersController = UsersController_1 = class UsersController {
             }, common_1.HttpStatus.BAD_REQUEST);
         }
     }
-    async recognizeFace(faceRecognitionDto) {
+    async recognizeFaceFromCamera(file) {
         try {
-            const user = await this.faceRecognitionService.recognizeFace(faceRecognitionDto.imagePath);
-            if (!user) {
-                throw new common_1.NotFoundException('Face not recognized');
+            const tempPath = path.join(process.cwd(), 'temporary', `temp-${Date.now()}.jpg`);
+            fs.writeFileSync(tempPath, file.buffer);
+            const recognizedUser = await this.faceRecognitionService.recognizeFace(tempPath);
+            fs.unlinkSync(tempPath);
+            if (recognizedUser) {
+                return {
+                    success: true,
+                    user: {
+                        id: recognizedUser.id,
+                        name: recognizedUser.name
+                    }
+                };
             }
-            return user;
+            return {
+                success: false,
+                message: 'No matching face found'
+            };
         }
         catch (error) {
-            this.logger.error(`Error recognizing face: ${error.message}`);
-            throw error;
+            return {
+                success: false,
+                message: error.message
+            };
         }
     }
 };
@@ -187,11 +204,12 @@ __decorate([
 ], UsersController.prototype, "addFace", null);
 __decorate([
     (0, common_1.Post)('recognize'),
-    __param(0, (0, common_1.Body)()),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('imageFile')),
+    __param(0, (0, common_1.UploadedFile)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [face_recognition_dto_1.FaceRecognitionDto]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], UsersController.prototype, "recognizeFace", null);
+], UsersController.prototype, "recognizeFaceFromCamera", null);
 exports.UsersController = UsersController = UsersController_1 = __decorate([
     (0, common_1.Controller)('users'),
     __metadata("design:paramtypes", [users_service_1.UsersService,

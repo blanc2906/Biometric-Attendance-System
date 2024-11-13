@@ -5,7 +5,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { MqttModule } from 'src/mqtt/mqtt.module';
 import { UserLog } from './entities/user_log.entity';
-import { MqttService } from 'src/mqtt/mqtt.service';
 import { FaceDescriptor } from './entities/face-descriptor.entity';
 import { FaceRecognitionService } from './face-recognition.service';
 

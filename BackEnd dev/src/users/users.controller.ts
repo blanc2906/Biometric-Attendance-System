@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Logger, NotFoundException, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Logger, NotFoundException, HttpException, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { Ctx, MessagePattern, MqttContext, Payload } from '@nestjs/microservices';
@@ -6,6 +6,9 @@ import { User } from './entities/user.entity';
 import { UserLog } from './entities/user_log.entity';
 import { FaceRecognitionService } from './face-recognition.service';
 import { FaceRecognitionDto } from './dto/face-recognition.dto';
+import * as fs from 'fs';
+import * as path from 'path';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('users')
 export class UsersController {
@@ -146,20 +149,37 @@ export class UsersController {
   }
 
   @Post('recognize')
-  async recognizeFace(@Body() faceRecognitionDto: FaceRecognitionDto) {
+  @UseInterceptors(FileInterceptor('imageFile'))
+  async recognizeFaceFromCamera(@UploadedFile() file: Express.Multer.File) {
     try {
-      const user = await this.faceRecognitionService.recognizeFace(
-        faceRecognitionDto.imagePath
-      );
-      
-      if (!user) {
-        throw new NotFoundException('Face not recognized');
+  
+      const tempPath = path.join(process.cwd(), 'temporary', `temp-${Date.now()}.jpg`);
+      fs.writeFileSync(tempPath, file.buffer);
+      //console.log('received file');
+
+      const recognizedUser = await this.faceRecognitionService.recognizeFace(tempPath);
+
+      fs.unlinkSync(tempPath);
+
+      if (recognizedUser) {
+        return {
+          success: true,
+          user: {
+            id: recognizedUser.id,
+            name: recognizedUser.name
+          }
+        };
       }
 
-      return user;
+      return {
+        success: false,
+        message: 'No matching face found'
+      };
     } catch (error) {
-      this.logger.error(`Error recognizing face: ${error.message}`);
-      throw error;
+      return {
+        success: false,
+        message: error.message
+      };
     }
   }
 }

@@ -24,5 +24,16 @@ export declare class UsersController {
         message: string;
         data: import("./entities/face-descriptor.entity").FaceDescriptor;
     }>;
-    recognizeFace(faceRecognitionDto: FaceRecognitionDto): Promise<User>;
+    recognizeFaceFromCamera(file: Express.Multer.File): Promise<{
+        success: boolean;
+        user: {
+            id: number;
+            name: string;
+        };
+        message?: undefined;
+    } | {
+        success: boolean;
+        message: any;
+        user?: undefined;
+    }>;
 }
