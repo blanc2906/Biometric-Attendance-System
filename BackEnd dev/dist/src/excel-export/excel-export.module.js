@@ -17,13 +17,14 @@ const users_module_1 = require("../users/users.module");
 const users_service_1 = require("../users/users.service");
 const mqtt_module_1 = require("../mqtt/mqtt.module");
 const mqtt_service_1 = require("../mqtt/mqtt.service");
+const face_descriptor_entity_1 = require("../users/entities/face-descriptor.entity");
 let ExcelExportModule = class ExcelExportModule {
 };
 exports.ExcelExportModule = ExcelExportModule;
 exports.ExcelExportModule = ExcelExportModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, user_log_entity_1.UserLog]),
+            typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, user_log_entity_1.UserLog, face_descriptor_entity_1.FaceDescriptor]),
             users_module_1.UsersModule,
             mqtt_module_1.MqttModule
         ],

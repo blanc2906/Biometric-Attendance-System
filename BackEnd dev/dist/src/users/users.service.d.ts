@@ -5,11 +5,15 @@ import { Repository } from 'typeorm';
 import { CreateUserLogDto } from './dto/create-user_log.dto';
 import { UpdateUserLogDto } from './dto/update-user_log.entity';
 import { MqttService } from 'src/mqtt/mqtt.service';
+import { FaceDescriptor } from './entities/face-descriptor.entity';
 export declare class UsersService {
     private readonly usersRepository;
     private readonly userLogRepository;
+    private readonly faceDescriptorRepository;
     private readonly mqttService;
-    constructor(usersRepository: Repository<User>, userLogRepository: Repository<UserLog>, mqttService: MqttService);
+    private readonly userCache;
+    private readonly cacheTimeout;
+    constructor(usersRepository: Repository<User>, userLogRepository: Repository<UserLog>, faceDescriptorRepository: Repository<FaceDescriptor>, mqttService: MqttService);
     private findUserOrThrow;
     initiateUserCreation(): Promise<void>;
     create(createUserDto: CreateUserDto): Promise<User>;
@@ -21,4 +25,5 @@ export declare class UsersService {
     updateUserLog(userId: number, date: Date, time_in: string, updateUserLogDto: UpdateUserLogDto): Promise<UserLog>;
     getLatestUserLog(userId: number): Promise<UserLog | null>;
     populateData(): Promise<any[]>;
+    private cacheUser;
 }

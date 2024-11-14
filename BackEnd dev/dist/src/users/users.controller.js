@@ -22,12 +22,18 @@ const face_recognition_service_1 = require("./face-recognition.service");
 const fs = require("fs");
 const path = require("path");
 const platform_express_1 = require("@nestjs/platform-express");
+const mqtt_service_1 = require("../mqtt/mqtt.service");
 let UsersController = UsersController_1 = class UsersController {
-    constructor(usersService, faceRecognitionService) {
+    constructor(usersService, faceRecognitionService, mqttService) {
         this.usersService = usersService;
         this.faceRecognitionService = faceRecognitionService;
-        this.logger = new common_1.Logger(UsersController_1.name);
+        this.mqttService = mqttService;
         this.userLoginStatus = new Map();
+        this.logger = new common_1.Logger(UsersController_1.name);
+        this.tempDirectory = path.join(process.cwd(), 'temporary');
+        if (!fs.existsSync(this.tempDirectory)) {
+            fs.mkdirSync(this.tempDirectory, { recursive: true });
+        }
     }
     async create() {
         try {
@@ -47,59 +53,6 @@ let UsersController = UsersController_1 = class UsersController {
     }
     remove(id) {
         return this.usersService.remove(+id);
-    }
-    async handleUserLogin(user, latestUserLog) {
-        const userLog = new user_log_entity_1.UserLog();
-        userLog.user = user;
-        userLog.date = new Date();
-        userLog.time_in = new Date().toTimeString().split(' ')[0];
-        this.logger.log(`${user.name} logged in at ${userLog.time_in}`);
-        await this.usersService.saveUserLog(user.id, {
-            date: userLog.date,
-            time_in: userLog.time_in,
-            time_out: null,
-        });
-        this.userLoginStatus.set(user.id, true);
-    }
-    async handleUserLogout(user, latestUserLog) {
-        const time_out = new Date().toTimeString().split(' ')[0];
-        this.logger.log(`${user.name} logged out at ${time_out}`);
-        await this.usersService.updateUserLog(user.id, latestUserLog.date, latestUserLog.time_in, { time_out });
-        this.userLoginStatus.set(user.id, false);
-    }
-    async getNotifications(data, context) {
-        try {
-            const userId = await this.usersService.findUserByFingerID(Number(data));
-            const user = await this.usersService.findOne(userId);
-            const latestUserLog = await this.usersService.getLatestUserLog(userId);
-            const isLoggedIn = this.userLoginStatus.get(userId) || false;
-            if (isLoggedIn && latestUserLog && !latestUserLog.time_out) {
-                await this.handleUserLogout(user, latestUserLog);
-            }
-            else {
-                await this.handleUserLogin(user, latestUserLog);
-            }
-        }
-        catch (error) {
-            this.logger.error(`Error processing user: ${error.message}`);
-        }
-    }
-    async createUser(data) {
-        try {
-            const finger_id = Number(data);
-            if (isNaN(finger_id)) {
-                this.logger.error(`Invalid finger_id received: ${data}`);
-                return;
-            }
-            const newUser = await this.usersService.create({
-                name: 'New User',
-                finger_id
-            });
-            this.logger.log(`Created new user with ID ${newUser.id} for finger ID ${finger_id}`);
-        }
-        catch (error) {
-            this.logger.error(`Error creating user: ${error.message}`);
-        }
     }
     async addFace(file, id) {
         try {
@@ -124,31 +77,87 @@ let UsersController = UsersController_1 = class UsersController {
         }
     }
     async recognizeFaceFromCamera(file) {
+        let tempPath = null;
         try {
-            const tempPath = path.join(process.cwd(), 'temporary', `temp-${Date.now()}.jpg`);
-            fs.writeFileSync(tempPath, file.buffer);
+            tempPath = await this.handleImageFile(file);
             const recognizedUser = await this.faceRecognitionService.recognizeFace(tempPath);
-            fs.unlinkSync(tempPath);
-            if (recognizedUser) {
-                return {
-                    success: true,
-                    user: {
-                        id: recognizedUser.id,
-                        name: recognizedUser.name
-                    }
-                };
-            }
-            return {
-                success: false,
-                message: 'No matching face found'
-            };
+            await this.mqttService.publish('face_attendance', recognizedUser.id.toString());
+            return recognizedUser
+                ? { success: true, user: { id: recognizedUser.id, name: recognizedUser.name } }
+                : { success: false, message: 'No matching face found' };
         }
         catch (error) {
-            return {
-                success: false,
-                message: error.message
-            };
+            return { success: false, message: error.message };
         }
+        finally {
+            if (tempPath)
+                await fs.promises.unlink(tempPath).catch(() => { });
+        }
+    }
+    async handleFingerAttendance(data, context) {
+        const userID = await this.usersService.findUserByFingerID(Number(data));
+        return this.processAttendance(userID.toString());
+    }
+    async handleFaceAttendance(data, context) {
+        return this.processAttendance(data);
+    }
+    async createUser(data) {
+        try {
+            const finger_id = Number(data);
+            if (isNaN(finger_id)) {
+                this.logger.error(`Invalid finger_id received: ${data}`);
+                return;
+            }
+            const newUser = await this.usersService.create({
+                name: 'New User',
+                finger_id
+            });
+            this.logger.log(`Created new user with ID ${newUser.id} for finger ID ${finger_id}`);
+        }
+        catch (error) {
+            this.logger.error(`Error creating user: ${error.message}`);
+        }
+    }
+    async handleUserLogin(user, latestUserLog) {
+        const userLog = new user_log_entity_1.UserLog();
+        userLog.user = user;
+        userLog.date = new Date();
+        userLog.time_in = new Date().toTimeString().split(' ')[0];
+        this.logger.log(`${user.name} logged in at ${userLog.time_in}`);
+        await this.usersService.saveUserLog(user.id, {
+            date: userLog.date,
+            time_in: userLog.time_in,
+            time_out: null,
+        });
+        this.userLoginStatus.set(user.id, true);
+    }
+    async handleUserLogout(user, latestUserLog) {
+        const time_out = new Date().toTimeString().split(' ')[0];
+        this.logger.log(`${user.name} logged out at ${time_out}`);
+        await this.usersService.updateUserLog(user.id, latestUserLog.date, latestUserLog.time_in, { time_out });
+        this.userLoginStatus.set(user.id, false);
+    }
+    async processAttendance(data) {
+        try {
+            const userId = Number(data);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
+            }
+            const user = await this.usersService.findOne(userId);
+            const latestUserLog = await this.usersService.getLatestUserLog(userId);
+            const isLoggedIn = this.userLoginStatus.get(userId) ?? false;
+            await (isLoggedIn && latestUserLog?.time_out === null
+                ? this.handleUserLogout(user, latestUserLog)
+                : this.handleUserLogin(user, latestUserLog));
+        }
+        catch (error) {
+            this.logger.error(`Error processing attendance: ${error.message}`);
+        }
+    }
+    async handleImageFile(file) {
+        const tempPath = path.join(this.tempDirectory, `temp-${Date.now()}.jpg`);
+        await fs.promises.writeFile(tempPath, file.buffer);
+        return tempPath;
     }
 };
 exports.UsersController = UsersController;
@@ -179,21 +188,6 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "remove", null);
 __decorate([
-    (0, microservices_1.MessagePattern)('user_log'),
-    __param(0, (0, microservices_1.Payload)()),
-    __param(1, (0, microservices_1.Ctx)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, microservices_1.MqttContext]),
-    __metadata("design:returntype", Promise)
-], UsersController.prototype, "getNotifications", null);
-__decorate([
-    (0, microservices_1.MessagePattern)('create_new_user'),
-    __param(0, (0, microservices_1.Payload)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", Promise)
-], UsersController.prototype, "createUser", null);
-__decorate([
     (0, common_1.Post)(':id/add-face'),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('image')),
     __param(0, (0, common_1.UploadedFile)()),
@@ -210,9 +204,33 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "recognizeFaceFromCamera", null);
+__decorate([
+    (0, microservices_1.MessagePattern)('finger_attendance'),
+    __param(0, (0, microservices_1.Payload)()),
+    __param(1, (0, microservices_1.Ctx)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, microservices_1.MqttContext]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "handleFingerAttendance", null);
+__decorate([
+    (0, microservices_1.MessagePattern)('face_attendance'),
+    __param(0, (0, microservices_1.Payload)()),
+    __param(1, (0, microservices_1.Ctx)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, microservices_1.MqttContext]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "handleFaceAttendance", null);
+__decorate([
+    (0, microservices_1.MessagePattern)('create_new_user'),
+    __param(0, (0, microservices_1.Payload)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "createUser", null);
 exports.UsersController = UsersController = UsersController_1 = __decorate([
     (0, common_1.Controller)('users'),
     __metadata("design:paramtypes", [users_service_1.UsersService,
-        face_recognition_service_1.FaceRecognitionService])
+        face_recognition_service_1.FaceRecognitionService,
+        mqtt_service_1.MqttService])
 ], UsersController);
 //# sourceMappingURL=users.controller.js.map

@@ -9,17 +9,23 @@ import { FaceRecognitionDto } from './dto/face-recognition.dto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { MqttService } from 'src/mqtt/mqtt.service';
 
 @Controller('users')
 export class UsersController {
+  private readonly userLoginStatus = new Map<number, boolean>();
   private readonly logger = new Logger(UsersController.name);
-
-  private userLoginStatus: Map<number, boolean> = new Map();
+  private readonly tempDirectory = path.join(process.cwd(), 'temporary');
 
   constructor(
     private readonly usersService: UsersService,
-    private readonly faceRecognitionService: FaceRecognitionService
-  ) {}
+    private readonly faceRecognitionService: FaceRecognitionService,
+    private readonly mqttService : MqttService
+  ) {
+    if (!fs.existsSync(this.tempDirectory)) {
+      fs.mkdirSync(this.tempDirectory, { recursive: true });
+    }
+  }
 
   @Post('create_user')
   async create() {
@@ -47,74 +53,6 @@ export class UsersController {
     return this.usersService.remove(+id);
   }
 
-  private async handleUserLogin(user: User, latestUserLog: UserLog | null): Promise<void> {
-    const userLog = new UserLog();
-    userLog.user = user;
-    userLog.date = new Date();
-    userLog.time_in = new Date().toTimeString().split(' ')[0];
-    
-    this.logger.log(`${user.name} logged in at ${userLog.time_in}`);
-    
-    await this.usersService.saveUserLog(user.id, {
-      date: userLog.date,
-      time_in: userLog.time_in,
-      time_out: null,
-    });
-    
-    this.userLoginStatus.set(user.id, true);
-  }
-
-  private async handleUserLogout(user: User, latestUserLog: UserLog): Promise<void> {
-    const time_out = new Date().toTimeString().split(' ')[0];
-    this.logger.log(`${user.name} logged out at ${time_out}`);
-    
-    await this.usersService.updateUserLog(
-      user.id, 
-      latestUserLog.date, 
-      latestUserLog.time_in, 
-      { time_out }
-    );
-    
-    this.userLoginStatus.set(user.id, false);
-  }
-
-  @MessagePattern('user_log')
-  async getNotifications(@Payload() data: string, @Ctx() context: MqttContext) {
-    try {
-      const userId = await this.usersService.findUserByFingerID(Number(data));
-      const user = await this.usersService.findOne(userId);
-      const latestUserLog = await this.usersService.getLatestUserLog(userId);
-      const isLoggedIn = this.userLoginStatus.get(userId) || false;
-
-      if (isLoggedIn && latestUserLog && !latestUserLog.time_out) {
-        await this.handleUserLogout(user, latestUserLog);
-      } else {
-        await this.handleUserLogin(user, latestUserLog);
-      }
-    } catch (error) {
-      this.logger.error(`Error processing user: ${error.message}`);
-    }
-  }
-
-  @MessagePattern('create_new_user')
-  async createUser(@Payload() data: string) {
-    try {
-      const finger_id = Number(data);
-      
-      if (isNaN(finger_id)) {
-        this.logger.error(`Invalid finger_id received: ${data}`);
-        return;
-      }
-      
-      const newUser = await this.usersService.create({
-        name: 'New User',
-        finger_id
-      });
-      this.logger.log(`Created new user with ID ${newUser.id} for finger ID ${finger_id}`);
-    } catch (error) {
-      this.logger.error(`Error creating user: ${error.message}`);
-    }
-  }
   @Post(':id/add-face')
   @UseInterceptors(FileInterceptor('image'))
   async addFace(
@@ -148,35 +86,108 @@ export class UsersController {
   @Post('recognize')
   @UseInterceptors(FileInterceptor('imageFile'))
   async recognizeFaceFromCamera(@UploadedFile() file: Express.Multer.File) {
+    let tempPath: string | null = null;
     try {
-  
-      const tempPath = path.join(process.cwd(), 'temporary', `temp-${Date.now()}.jpg`);
-      fs.writeFileSync(tempPath, file.buffer);
-      //console.log('received file');
-
+      tempPath = await this.handleImageFile(file);
       const recognizedUser = await this.faceRecognitionService.recognizeFace(tempPath);
+      await this.mqttService.publish('face_attendance',recognizedUser.id.toString());
 
-      fs.unlinkSync(tempPath);
+      return recognizedUser 
+        ? { success: true, user: { id: recognizedUser.id, name: recognizedUser.name } }
+        : { success: false, message: 'No matching face found' };
+    } catch (error) {
+      return { success: false, message: error.message };
+    } finally {
+      if (tempPath) await fs.promises.unlink(tempPath).catch(() => {});
+    }
+  }
 
-      if (recognizedUser) {
-        return {
-          success: true,
-          user: {
-            id: recognizedUser.id,
-            name: recognizedUser.name
-          }
-        };
+
+  @MessagePattern('finger_attendance')
+  async handleFingerAttendance(@Payload() data: string, @Ctx() context: MqttContext) {
+    const userID = await this.usersService.findUserByFingerID(Number(data));
+    return this.processAttendance(userID.toString());
+  }
+
+  @MessagePattern('face_attendance')
+  async handleFaceAttendance(@Payload() data: string, @Ctx() context: MqttContext) {
+    return this.processAttendance(data);
+  }
+
+  @MessagePattern('create_new_user')
+  async createUser(@Payload() data: string) {
+    try {
+      const finger_id = Number(data);
+      
+      if (isNaN(finger_id)) {
+        this.logger.error(`Invalid finger_id received: ${data}`);
+        return;
+      }
+      
+      const newUser = await this.usersService.create({
+        name: 'New User',
+        finger_id
+      });
+      this.logger.log(`Created new user with ID ${newUser.id} for finger ID ${finger_id}`);
+    } catch (error) {
+      this.logger.error(`Error creating user: ${error.message}`);
+    }
+  }
+  
+
+  private async handleUserLogin(user: User, latestUserLog: UserLog | null): Promise<void> {
+    const userLog = new UserLog();
+    userLog.user = user;
+    userLog.date = new Date();
+    userLog.time_in = new Date().toTimeString().split(' ')[0];
+    
+    this.logger.log(`${user.name} logged in at ${userLog.time_in}`);
+    
+    await this.usersService.saveUserLog(user.id, {
+      date: userLog.date,
+      time_in: userLog.time_in,
+      time_out: null,
+    });
+    
+    this.userLoginStatus.set(user.id, true);
+  }
+
+  private async handleUserLogout(user: User, latestUserLog: UserLog): Promise<void> {
+    const time_out = new Date().toTimeString().split(' ')[0];
+    this.logger.log(`${user.name} logged out at ${time_out}`);
+    
+    await this.usersService.updateUserLog(
+      user.id, 
+      latestUserLog.date, 
+      latestUserLog.time_in, 
+      { time_out }
+    );
+    
+    this.userLoginStatus.set(user.id, false);
+  }
+
+  private async processAttendance(data: string): Promise<void> {
+    try {
+      const userId = Number(data);
+      if (isNaN(userId)) {
+        throw new Error('Invalid user ID');
       }
 
-      return {
-        success: false,
-        message: 'No matching face found'
-      };
+      const user = await this.usersService.findOne(userId);
+      const latestUserLog = await this.usersService.getLatestUserLog(userId);
+      const isLoggedIn = this.userLoginStatus.get(userId) ?? false;
+
+      await (isLoggedIn && latestUserLog?.time_out === null
+        ? this.handleUserLogout(user, latestUserLog)
+        : this.handleUserLogin(user, latestUserLog));
     } catch (error) {
-      return {
-        success: false,
-        message: error.message
-      };
+      this.logger.error(`Error processing attendance: ${error.message}`);
     }
+  }
+
+  private async handleImageFile(file: Express.Multer.File): Promise<string> {
+    const tempPath = path.join(this.tempDirectory, `temp-${Date.now()}.jpg`);
+    await fs.promises.writeFile(tempPath, file.buffer);
+    return tempPath;
   }
 }

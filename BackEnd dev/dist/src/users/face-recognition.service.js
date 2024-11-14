@@ -59,7 +59,6 @@ let FaceRecognitionService = class FaceRecognitionService {
         }
     }
     async addFaceDescriptor(userId, imagePath) {
-        console.log(`Processing face descriptor for user ${userId} with image: ${imagePath}`);
         const user = await this.userRepository.findOne({
             where: { id: userId },
             relations: ['faceDescriptor']
@@ -70,7 +69,6 @@ let FaceRecognitionService = class FaceRecognitionService {
         let tensor = null;
         try {
             tensor = await this.processImage(imagePath);
-            console.log('Starting face detection');
             const detection = await faceapi
                 .detectSingleFace(tensor)
                 .withFaceLandmarks()
@@ -118,9 +116,10 @@ let FaceRecognitionService = class FaceRecognitionService {
             const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
             const match = faceMatcher.findBestMatch(detection.descriptor);
             if (match.distance < 0.6) {
-                return await this.userRepository.findOne({
+                const detectedUser = this.userRepository.findOne({
                     where: { id: parseInt(match.label) }
                 });
+                return detectedUser;
             }
             return null;
         }

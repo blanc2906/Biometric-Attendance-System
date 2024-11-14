@@ -19,11 +19,15 @@ const user_entity_1 = require("./entities/user.entity");
 const user_log_entity_1 = require("./entities/user_log.entity");
 const typeorm_2 = require("typeorm");
 const mqtt_service_1 = require("../mqtt/mqtt.service");
+const face_descriptor_entity_1 = require("./entities/face-descriptor.entity");
 let UsersService = class UsersService {
-    constructor(usersRepository, userLogRepository, mqttService) {
+    constructor(usersRepository, userLogRepository, faceDescriptorRepository, mqttService) {
         this.usersRepository = usersRepository;
         this.userLogRepository = userLogRepository;
+        this.faceDescriptorRepository = faceDescriptorRepository;
         this.mqttService = mqttService;
+        this.userCache = new Map();
+        this.cacheTimeout = 5 * 60 * 1000;
     }
     async findUserOrThrow(id) {
         const user = await this.usersRepository.findOneBy({ id });
@@ -63,7 +67,12 @@ let UsersService = class UsersService {
         return await this.usersRepository.find();
     }
     async findOne(id) {
-        return await this.findUserOrThrow(id);
+        const cachedUser = this.userCache.get(id);
+        if (cachedUser)
+            return cachedUser;
+        const user = await this.findUserOrThrow(id);
+        await this.cacheUser(user);
+        return user;
     }
     async findUserByFingerID(finger_id) {
         const user = await this.usersRepository.findOne({
@@ -77,11 +86,12 @@ let UsersService = class UsersService {
     async remove(id) {
         const user = await this.usersRepository.findOne({
             where: { id },
-            relations: ['userlog']
+            relations: ['userlog', 'faceDescriptor']
         });
         if (!user) {
             throw new common_1.NotFoundException(`User with id ${id} not found`);
         }
+        await this.faceDescriptorRepository.delete({ user: { id } });
         await this.userLogRepository.delete({ user: { id } });
         await this.usersRepository.delete(id);
         try {
@@ -92,7 +102,7 @@ let UsersService = class UsersService {
         }
     }
     async saveUserLog(userId, createUserLogDto) {
-        const user = await this.findUserOrThrow(userId);
+        const user = await this.findOne(userId);
         const userLog = this.userLogRepository.create({
             user,
             ...createUserLogDto
@@ -100,7 +110,7 @@ let UsersService = class UsersService {
         return await this.userLogRepository.save(userLog);
     }
     async updateUserLog(userId, date, time_in, updateUserLogDto) {
-        const user = await this.findUserOrThrow(userId);
+        const user = await this.findOne(userId);
         const userLog = await this.userLogRepository.findOne({
             where: { user, date, time_in }
         });
@@ -119,16 +129,21 @@ let UsersService = class UsersService {
         return logs[0] || null;
     }
     async populateData() {
-        const userLogs = await this.userLogRepository.find({
-            relations: ['user'],
-        });
-        return userLogs.map((log) => ({
-            id: log.user.id.toString(),
-            name: log.user.name,
-            date: log.date.toString(),
-            time_in: log.time_in,
-            time_out: log.time_out || "",
-        }));
+        return this.userLogRepository
+            .createQueryBuilder('log')
+            .leftJoinAndSelect('log.user', 'user')
+            .select([
+            'user.id as id',
+            'user.name as name',
+            'log.date as date',
+            'log.time_in as time_in',
+            'COALESCE(log.time_out, \'\') as time_out'
+        ])
+            .getRawMany();
+    }
+    async cacheUser(user) {
+        this.userCache.set(user.id, user);
+        setTimeout(() => this.userCache.delete(user.id), this.cacheTimeout);
     }
 };
 exports.UsersService = UsersService;
@@ -136,7 +151,9 @@ exports.UsersService = UsersService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
     __param(1, (0, typeorm_1.InjectRepository)(user_log_entity_1.UserLog)),
+    __param(2, (0, typeorm_1.InjectRepository)(face_descriptor_entity_1.FaceDescriptor)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
         typeorm_2.Repository,
         mqtt_service_1.MqttService])
 ], UsersService);

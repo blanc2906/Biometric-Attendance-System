@@ -237,7 +237,7 @@ uint8_t getFingerprintID() {
 
    char fingerIDStr[5];
   itoa(finger.fingerID, fingerIDStr, 10);
-  mqtt_client.publish("user_log", fingerIDStr);
+  mqtt_client.publish("finger_attendance", fingerIDStr);
 
   return finger.fingerID;
 }

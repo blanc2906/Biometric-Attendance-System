@@ -7,14 +7,21 @@ import { Repository } from 'typeorm';
 import { CreateUserLogDto } from './dto/create-user_log.dto';
 import { UpdateUserLogDto } from './dto/update-user_log.entity';
 import { MqttService } from 'src/mqtt/mqtt.service';
+import { FaceDescriptor } from './entities/face-descriptor.entity';
 
 @Injectable()
 export class UsersService {
+  private readonly userCache = new Map<number, User>();
+  private readonly cacheTimeout = 5 * 60 * 1000; // 5 minutes
+
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
     @InjectRepository(UserLog)
     private readonly userLogRepository: Repository<UserLog>,
+    @InjectRepository(FaceDescriptor)
+    private readonly faceDescriptorRepository : Repository<FaceDescriptor>,
+
     private readonly mqttService: MqttService
   ) {}
 
@@ -61,7 +68,12 @@ export class UsersService {
   }
 
   async findOne(id: number): Promise<User> {
-    return await this.findUserOrThrow(id);
+    const cachedUser = this.userCache.get(id);
+    if (cachedUser) return cachedUser;
+
+    const user = await this.findUserOrThrow(id);
+    await this.cacheUser(user);
+    return user;
   }
 
   async findUserByFingerID(finger_id: number): Promise<number> {
@@ -77,12 +89,12 @@ export class UsersService {
   async remove(id: number): Promise<void> {
     const user = await this.usersRepository.findOne({ 
       where: { id }, 
-      relations: ['userlog'] 
+      relations: ['userlog', 'faceDescriptor'] 
     });
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
     }
-
+    await this.faceDescriptorRepository.delete({ user: { id } });
     await this.userLogRepository.delete({ user: { id } });
 
     await this.usersRepository.delete(id);
@@ -95,7 +107,7 @@ export class UsersService {
   }
 
   async saveUserLog(userId: number, createUserLogDto: CreateUserLogDto): Promise<UserLog> {
-    const user = await this.findUserOrThrow(userId);
+    const user = await this.findOne(userId);
     const userLog = this.userLogRepository.create({
       user,
       ...createUserLogDto
@@ -104,7 +116,7 @@ export class UsersService {
   }
 
   async updateUserLog(userId: number, date: Date, time_in: string, updateUserLogDto: UpdateUserLogDto): Promise<UserLog> {
-    const user = await this.findUserOrThrow(userId);
+    const user = await this.findOne(userId);
     const userLog = await this.userLogRepository.findOne({
       where: { user, date, time_in }
     });
@@ -125,16 +137,21 @@ export class UsersService {
   }
 
   async populateData(): Promise<any[]> {
-    const userLogs = await this.userLogRepository.find({
-      relations: ['user'],
-    });
-    
-    return userLogs.map((log) => ({
-      id: log.user.id.toString(),
-      name: log.user.name,
-      date: log.date.toString(),
-      time_in: log.time_in,
-      time_out: log.time_out || "",
-    }));
+    return this.userLogRepository
+      .createQueryBuilder('log')
+      .leftJoinAndSelect('log.user', 'user')
+      .select([
+        'user.id as id',
+        'user.name as name',
+        'log.date as date',
+        'log.time_in as time_in',
+        'COALESCE(log.time_out, \'\') as time_out'
+      ])
+      .getRawMany();
+  }
+
+  private async cacheUser(user: User): Promise<void> {
+    this.userCache.set(user.id, user);
+    setTimeout(() => this.userCache.delete(user.id), this.cacheTimeout);
   }
 }

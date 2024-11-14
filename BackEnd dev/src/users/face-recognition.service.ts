@@ -17,7 +17,7 @@ export class FaceRecognitionService implements OnModuleInit {
         @InjectRepository(FaceDescriptor)
         private faceDescriptorRepository: Repository<FaceDescriptor>,
         @InjectRepository(User)
-        private userRepository: Repository<User>,
+        private userRepository: Repository<User>
     ) {
        
         this.canvas = createCanvas(1024, 1024);
@@ -56,7 +56,6 @@ export class FaceRecognitionService implements OnModuleInit {
     }
 
     async addFaceDescriptor(userId: number, imagePath: string) {
-        console.log(`Processing face descriptor for user ${userId} with image: ${imagePath}`);
         
         const user = await this.userRepository.findOne({ 
             where: { id: userId },
@@ -71,8 +70,7 @@ export class FaceRecognitionService implements OnModuleInit {
 
         try {
             tensor = await this.processImage(imagePath);
-            
-            console.log('Starting face detection');
+
             const detection = await faceapi
                 .detectSingleFace(tensor as unknown as HTMLCanvasElement)
                 .withFaceLandmarks()
@@ -138,11 +136,12 @@ export class FaceRecognitionService implements OnModuleInit {
             const match = faceMatcher.findBestMatch(detection.descriptor);
 
             if (match.distance < 0.6) {
-                return await this.userRepository.findOne({
+                const detectedUser = this.userRepository.findOne({
                     where: { id: parseInt(match.label) }
                 });
+                return detectedUser;
+                
             }
-
             return null;
         } catch (error) {
             console.error('Error in face recognition:', error);
