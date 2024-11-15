@@ -81,10 +81,17 @@ let UsersController = UsersController_1 = class UsersController {
         try {
             tempPath = await this.handleImageFile(file);
             const recognizedUser = await this.faceRecognitionService.recognizeFace(tempPath);
+            if (!recognizedUser) {
+                return { success: false, message: 'No matching face found' };
+            }
             await this.mqttService.publish('face_attendance', recognizedUser.id.toString());
-            return recognizedUser
-                ? { success: true, user: { id: recognizedUser.id, name: recognizedUser.name } }
-                : { success: false, message: 'No matching face found' };
+            return {
+                success: true,
+                user: {
+                    id: recognizedUser.id,
+                    name: recognizedUser.name
+                }
+            };
         }
         catch (error) {
             return { success: false, message: error.message };

@@ -76,6 +76,17 @@ let FaceRecognitionService = class FaceRecognitionService {
             if (!detection) {
                 throw new Error('No face detected in the image');
             }
+            const existingFaceDescriptors = await this.faceDescriptorRepository.find({
+                relations: ['user']
+            });
+            if (existingFaceDescriptors.length > 0) {
+                const labeledDescriptors = existingFaceDescriptors.map(fd => new faceapi.LabeledFaceDescriptors(fd.user.id.toString(), [new Float32Array(fd.descriptor)]));
+                const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
+                const match = faceMatcher.findBestMatch(detection.descriptor);
+                if (match.distance < 0.6) {
+                    throw new Error(`This face is already registered for user ID: ${match.label}`);
+                }
+            }
             if (user.faceDescriptor) {
                 await this.faceDescriptorRepository.remove(user.faceDescriptor);
             }
@@ -116,18 +127,17 @@ let FaceRecognitionService = class FaceRecognitionService {
             const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
             const match = faceMatcher.findBestMatch(detection.descriptor);
             if (match.distance < 0.6) {
-                const detectedUser = this.userRepository.findOne({
-                    where: { id: parseInt(match.label) }
+                const userId = parseInt(match.label);
+                const detectedUser = await this.userRepository.findOne({
+                    where: { id: userId }
                 });
-                return detectedUser;
+                return detectedUser || null;
             }
             return null;
         }
         catch (error) {
             console.error('Error in face recognition:', error);
             throw new Error(`Face recognition failed: ${error.message}`);
-        }
-        finally {
         }
     }
 };

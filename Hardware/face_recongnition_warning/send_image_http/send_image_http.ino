@@ -4,10 +4,10 @@
 #include "soc/rtc_cntl_reg.h"
 #include "esp_camera.h"
 
-const char* ssid = "SONGNAM-STAFF";
-const char* password = "songnam@123";
+const char* ssid = "Phong 304";
+const char* password = "Buivietlang29062003";
 
-String serverName = "192.168.1.89";
+String serverName = "192.168.1.3";
 String serverPath = "/users/recognize";
 
 const int serverPort = 9000;
