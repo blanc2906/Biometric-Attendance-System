@@ -4,6 +4,7 @@
 #include <ESP_Mail_Client.h>
 #include <FS.h>
 #include <WiFi.h>
+#include "secret.h"
 
 const char* ssid = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
