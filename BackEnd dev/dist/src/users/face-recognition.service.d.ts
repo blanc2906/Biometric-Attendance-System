@@ -1,15 +1,20 @@
 import { OnModuleInit } from '@nestjs/common';
-import { Repository } from 'typeorm';
-import { FaceDescriptor } from './entities/face-descriptor.entity';
-import { User } from './entities/user.entity';
+import { Model } from 'mongoose';
+import { FaceDescriptor, FaceDescriptorDocument } from './schemas/face-descriptor.schema';
+import { UserDocument } from './schemas/user.schema';
+import { Document } from 'mongoose';
 export declare class FaceRecognitionService implements OnModuleInit {
-    private faceDescriptorRepository;
-    private userRepository;
+    private faceDescriptorModel;
+    private userModel;
     private modelPath;
     private canvas;
-    constructor(faceDescriptorRepository: Repository<FaceDescriptor>, userRepository: Repository<User>);
+    constructor(faceDescriptorModel: Model<FaceDescriptorDocument>, userModel: Model<UserDocument>);
     onModuleInit(): Promise<void>;
     private processImage;
-    addFaceDescriptor(userId: number, imagePath: string): Promise<FaceDescriptor>;
-    recognizeFace(imagePath: string): Promise<User | null>;
+    addFaceDescriptor(userId: string, imagePath: string): Promise<Document<unknown, {}, FaceDescriptorDocument> & FaceDescriptor & Document<unknown, any, any> & Required<{
+        _id: import("mongoose").Types.ObjectId;
+    }> & {
+        __v: number;
+    }>;
+    recognizeFace(imagePath: string): Promise<UserDocument | null>;
 }

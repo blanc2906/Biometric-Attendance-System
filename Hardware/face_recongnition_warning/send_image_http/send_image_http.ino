@@ -10,7 +10,7 @@ const char* password = "Buivietlang29062003";
 String serverName = "192.168.1.3";
 String serverPath = "/users/recognize";
 
-const int serverPort = 9000;
+const int serverPort = 3000;
 
 WiFiClient client;
 

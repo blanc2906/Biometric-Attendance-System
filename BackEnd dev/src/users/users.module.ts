@@ -1,20 +1,24 @@
 import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './entities/user.entity';
+import { User, UserSchema } from './schemas/user.schema';
+import { UserLog, UserLogSchema } from './schemas/user-log.schema';
+import { FaceDescriptor, FaceDescriptorSchema } from './schemas/face-descriptor.schema';
 import { MqttModule } from 'src/mqtt/mqtt.module';
-import { UserLog } from './entities/user_log.entity';
-import { FaceDescriptor } from './entities/face-descriptor.entity';
 import { FaceRecognitionService } from './face-recognition.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, UserLog, FaceDescriptor]),
+    MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+      { name: UserLog.name, schema: UserLogSchema },
+      { name: FaceDescriptor.name, schema: FaceDescriptorSchema },
+    ]),
     MqttModule
   ],
   controllers: [UsersController],
-  providers: [UsersService,FaceRecognitionService],
+  providers: [UsersService, FaceRecognitionService],
   exports: [UsersService]
 })
 export class UsersModule {}

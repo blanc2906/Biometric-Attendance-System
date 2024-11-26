@@ -16,16 +16,16 @@ exports.FaceRecognitionService = void 0;
 const common_1 = require("@nestjs/common");
 const tf = require("@tensorflow/tfjs-node");
 const faceapi = require("@vladmandic/face-api");
-const typeorm_1 = require("@nestjs/typeorm");
-const typeorm_2 = require("typeorm");
-const face_descriptor_entity_1 = require("./entities/face-descriptor.entity");
-const user_entity_1 = require("./entities/user.entity");
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
+const face_descriptor_schema_1 = require("./schemas/face-descriptor.schema");
+const user_schema_1 = require("./schemas/user.schema");
 const path = require("path");
 const canvas_1 = require("canvas");
 let FaceRecognitionService = class FaceRecognitionService {
-    constructor(faceDescriptorRepository, userRepository) {
-        this.faceDescriptorRepository = faceDescriptorRepository;
-        this.userRepository = userRepository;
+    constructor(faceDescriptorModel, userModel) {
+        this.faceDescriptorModel = faceDescriptorModel;
+        this.userModel = userModel;
         this.modelPath = path.join(process.cwd(), 'models');
         this.canvas = (0, canvas_1.createCanvas)(1024, 1024);
         global.HTMLCanvasElement = canvas_1.Canvas;
@@ -59,10 +59,7 @@ let FaceRecognitionService = class FaceRecognitionService {
         }
     }
     async addFaceDescriptor(userId, imagePath) {
-        const user = await this.userRepository.findOne({
-            where: { id: userId },
-            relations: ['faceDescriptor']
-        });
+        const user = await this.userModel.findById(userId).populate('faceDescriptor');
         if (!user) {
             throw new Error(`User with ID ${userId} not found`);
         }
@@ -76,11 +73,9 @@ let FaceRecognitionService = class FaceRecognitionService {
             if (!detection) {
                 throw new Error('No face detected in the image');
             }
-            const existingFaceDescriptors = await this.faceDescriptorRepository.find({
-                relations: ['user']
-            });
+            const existingFaceDescriptors = await this.faceDescriptorModel.find().populate('user');
             if (existingFaceDescriptors.length > 0) {
-                const labeledDescriptors = existingFaceDescriptors.map(fd => new faceapi.LabeledFaceDescriptors(fd.user.id.toString(), [new Float32Array(fd.descriptor)]));
+                const labeledDescriptors = existingFaceDescriptors.map(fd => new faceapi.LabeledFaceDescriptors(fd.user._id.toString(), [new Float32Array(fd.descriptor)]));
                 const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
                 const match = faceMatcher.findBestMatch(detection.descriptor);
                 if (match.distance < 0.6) {
@@ -88,22 +83,20 @@ let FaceRecognitionService = class FaceRecognitionService {
                 }
             }
             if (user.faceDescriptor) {
-                await this.faceDescriptorRepository.remove(user.faceDescriptor);
+                await this.faceDescriptorModel.findByIdAndDelete(user.faceDescriptor);
             }
-            const faceDescriptor = this.faceDescriptorRepository.create({
+            const faceDescriptor = new this.faceDescriptorModel({
                 descriptor: Array.from(detection.descriptor),
-                user: user
+                user: user._id
             });
-            const savedDescriptor = await this.faceDescriptorRepository.save(faceDescriptor);
-            user.faceDescriptor = savedDescriptor;
-            await this.userRepository.save(user);
+            const savedDescriptor = await faceDescriptor.save();
+            user.faceDescriptor = savedDescriptor._id;
+            await user.save();
             return savedDescriptor;
         }
         catch (error) {
             console.error('Error in face detection process:', error);
             throw new Error(`Face detection failed: ${error.message}`);
-        }
-        finally {
         }
     }
     async recognizeFace(imagePath) {
@@ -117,21 +110,17 @@ let FaceRecognitionService = class FaceRecognitionService {
             if (!detection) {
                 throw new Error('No face detected in the image');
             }
-            const faceDescriptors = await this.faceDescriptorRepository.find({
-                relations: ['user']
-            });
+            const faceDescriptors = await this.faceDescriptorModel.find().populate('user');
             if (faceDescriptors.length === 0) {
                 return null;
             }
-            const labeledDescriptors = faceDescriptors.map(fd => new faceapi.LabeledFaceDescriptors(fd.user.id.toString(), [new Float32Array(fd.descriptor)]));
+            const labeledDescriptors = faceDescriptors.map(fd => new faceapi.LabeledFaceDescriptors(fd.user._id.toString(), [new Float32Array(fd.descriptor)]));
             const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
             const match = faceMatcher.findBestMatch(detection.descriptor);
             if (match.distance < 0.6) {
-                const userId = parseInt(match.label);
-                const detectedUser = await this.userRepository.findOne({
-                    where: { id: userId }
-                });
-                return detectedUser || null;
+                const userId = match.label;
+                const detectedUser = await this.userModel.findById(userId);
+                return detectedUser;
             }
             return null;
         }
@@ -144,9 +133,9 @@ let FaceRecognitionService = class FaceRecognitionService {
 exports.FaceRecognitionService = FaceRecognitionService;
 exports.FaceRecognitionService = FaceRecognitionService = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(face_descriptor_entity_1.FaceDescriptor)),
-    __param(1, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
-    __metadata("design:paramtypes", [typeorm_2.Repository,
-        typeorm_2.Repository])
+    __param(0, (0, mongoose_1.InjectModel)(face_descriptor_schema_1.FaceDescriptor.name)),
+    __param(1, (0, mongoose_1.InjectModel)(user_schema_1.User.name)),
+    __metadata("design:paramtypes", [mongoose_2.Model,
+        mongoose_2.Model])
 ], FaceRecognitionService);
 //# sourceMappingURL=face-recognition.service.js.map

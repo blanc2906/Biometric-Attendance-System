@@ -1,31 +1,37 @@
 import { UsersService } from './users.service';
 import { MqttContext } from '@nestjs/microservices';
-import { User } from './entities/user.entity';
 import { FaceRecognitionService } from './face-recognition.service';
 import { MqttService } from 'src/mqtt/mqtt.service';
+import { UserDocument } from './schemas/user.schema';
+import { Types } from 'mongoose';
+import { CreateUserDto } from './dto/create-user.dto';
 export declare class UsersController {
     private readonly usersService;
     private readonly faceRecognitionService;
     private readonly mqttService;
-    private readonly userLoginStatus;
     private readonly logger;
     private readonly tempDirectory;
     constructor(usersService: UsersService, faceRecognitionService: FaceRecognitionService, mqttService: MqttService);
     create(): Promise<{
         message: string;
     }>;
-    findAll(): Promise<User[]>;
-    findOne(id: string): Promise<User>;
+    createNewUser(createUserDto: CreateUserDto): Promise<void>;
+    findAll(): Promise<UserDocument[]>;
+    findOne(id: string): Promise<UserDocument>;
     remove(id: string): Promise<void>;
     addFace(file: Express.Multer.File, id: string): Promise<{
         success: boolean;
         message: string;
-        data: import("./entities/face-descriptor.entity").FaceDescriptor;
+        data: import("mongoose").Document<unknown, {}, import("./schemas/face-descriptor.schema").FaceDescriptorDocument> & import("./schemas/face-descriptor.schema").FaceDescriptor & import("mongoose").Document<unknown, any, any> & Required<{
+            _id: Types.ObjectId;
+        }> & {
+            __v: number;
+        };
     }>;
     recognizeFaceFromCamera(file: Express.Multer.File): Promise<{
         success: boolean;
         user: {
-            id: number;
+            id: any;
             name: string;
         };
         message?: undefined;

@@ -17,18 +17,17 @@ exports.UsersController = void 0;
 const common_1 = require("@nestjs/common");
 const users_service_1 = require("./users.service");
 const microservices_1 = require("@nestjs/microservices");
-const user_log_entity_1 = require("./entities/user_log.entity");
 const face_recognition_service_1 = require("./face-recognition.service");
 const fs = require("fs");
 const path = require("path");
 const platform_express_1 = require("@nestjs/platform-express");
 const mqtt_service_1 = require("../mqtt/mqtt.service");
+const create_user_dto_1 = require("./dto/create-user.dto");
 let UsersController = UsersController_1 = class UsersController {
     constructor(usersService, faceRecognitionService, mqttService) {
         this.usersService = usersService;
         this.faceRecognitionService = faceRecognitionService;
         this.mqttService = mqttService;
-        this.userLoginStatus = new Map();
         this.logger = new common_1.Logger(UsersController_1.name);
         this.tempDirectory = path.join(process.cwd(), 'temporary');
         if (!fs.existsSync(this.tempDirectory)) {
@@ -45,20 +44,23 @@ let UsersController = UsersController_1 = class UsersController {
             throw error;
         }
     }
+    async createNewUser(createUserDto) {
+        await this.usersService.create(createUserDto);
+    }
     findAll() {
         return this.usersService.findAll();
     }
     findOne(id) {
-        return this.usersService.findOne(+id);
+        return this.usersService.findOne(id);
     }
     remove(id) {
-        return this.usersService.remove(+id);
+        return this.usersService.remove(id);
     }
     async addFace(file, id) {
         try {
             const tempPath = path.join(process.cwd(), 'temporary', `temp-${Date.now()}.jpg`);
             fs.writeFileSync(tempPath, file.buffer);
-            const addedUser = await this.faceRecognitionService.addFaceDescriptor(+id, tempPath);
+            const addedUser = await this.faceRecognitionService.addFaceDescriptor(id, tempPath);
             fs.unlinkSync(tempPath);
             return {
                 success: true,
@@ -97,8 +99,6 @@ let UsersController = UsersController_1 = class UsersController {
             return { success: false, message: error.message };
         }
         finally {
-            if (tempPath)
-                await fs.promises.unlink(tempPath).catch(() => { });
         }
     }
     async handleFingerAttendance(data, context) {
@@ -126,39 +126,39 @@ let UsersController = UsersController_1 = class UsersController {
         }
     }
     async handleUserLogin(user, latestUserLog) {
-        const userLog = new user_log_entity_1.UserLog();
-        userLog.user = user;
-        userLog.date = new Date();
-        userLog.time_in = new Date().toTimeString().split(' ')[0];
-        this.logger.log(`${user.name} logged in at ${userLog.time_in}`);
-        await this.usersService.saveUserLog(user.id, {
-            date: userLog.date,
-            time_in: userLog.time_in,
-            time_out: null,
+        const currentDate = new Date();
+        const timeIn = currentDate.toTimeString().split(' ')[0];
+        this.logger.log(`${user.name} logged in at ${timeIn}`);
+        await this.usersService.saveUserLog(user._id.toString(), {
+            date: currentDate,
+            time_in: timeIn,
+            time_out: null
         });
-        this.userLoginStatus.set(user.id, true);
     }
     async handleUserLogout(user, latestUserLog) {
-        const time_out = new Date().toTimeString().split(' ')[0];
-        this.logger.log(`${user.name} logged out at ${time_out}`);
-        await this.usersService.updateUserLog(user.id, latestUserLog.date, latestUserLog.time_in, { time_out });
-        this.userLoginStatus.set(user.id, false);
+        const timeOut = new Date().toTimeString().split(' ')[0];
+        this.logger.log(`${user.name} logged out at ${timeOut}`);
+        await this.usersService.updateUserLog(user._id.toString(), latestUserLog.date, latestUserLog.time_in, { time_out: timeOut });
     }
     async processAttendance(data) {
         try {
-            const userId = Number(data);
-            if (isNaN(userId)) {
-                throw new Error('Invalid user ID');
+            const user = await this.usersService.findOne(data);
+            const latestUserLog = await this.usersService.getLatestUserLog(data);
+            const currentTime = new Date();
+            if (!latestUserLog) {
+                await this.handleUserLogin(user, null);
+                return;
             }
-            const user = await this.usersService.findOne(userId);
-            const latestUserLog = await this.usersService.getLatestUserLog(userId);
-            const isLoggedIn = this.userLoginStatus.get(userId) ?? false;
-            await (isLoggedIn && latestUserLog?.time_out === null
-                ? this.handleUserLogout(user, latestUserLog)
-                : this.handleUserLogin(user, latestUserLog));
+            if (!latestUserLog.time_out) {
+                await this.handleUserLogout(user, latestUserLog);
+            }
+            else {
+                await this.handleUserLogin(user, latestUserLog);
+            }
         }
         catch (error) {
             this.logger.error(`Error processing attendance: ${error.message}`);
+            throw error;
         }
     }
     async handleImageFile(file) {
@@ -174,6 +174,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "create", null);
+__decorate([
+    (0, common_1.Post)('create_new_user'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [create_user_dto_1.CreateUserDto]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "createNewUser", null);
 __decorate([
     (0, common_1.Get)(),
     __metadata("design:type", Function),

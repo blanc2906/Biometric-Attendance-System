@@ -1,73 +1,63 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
-import { InjectRepository } from '@nestjs/typeorm';
-import { User } from './entities/user.entity';
-import { UserLog } from './entities/user_log.entity';
-import { Repository } from 'typeorm';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { User, UserDocument } from './schemas/user.schema';
+import { UserLog, UserLogDocument } from './schemas/user-log.schema';
 import { CreateUserLogDto } from './dto/create-user_log.dto';
-import { UpdateUserLogDto } from './dto/update-user_log.entity';
+import { UpdateUserLogDto } from './dto/update-user_log.dto';
 import { MqttService } from 'src/mqtt/mqtt.service';
-import { FaceDescriptor } from './entities/face-descriptor.entity';
+import { FaceDescriptor, FaceDescriptorDocument } from './schemas/face-descriptor.schema';
 
 @Injectable()
 export class UsersService {
-  private readonly userCache = new Map<number, User>();
+  private readonly userCache = new Map<string, UserDocument>();
   private readonly cacheTimeout = 5 * 60 * 1000; // 5 minutes
 
   constructor(
-    @InjectRepository(User)
-    private readonly usersRepository: Repository<User>,
-    @InjectRepository(UserLog)
-    private readonly userLogRepository: Repository<UserLog>,
-    @InjectRepository(FaceDescriptor)
-    private readonly faceDescriptorRepository : Repository<FaceDescriptor>,
-
+    @InjectModel(User.name)
+    private readonly userModel: Model<UserDocument>,
+    @InjectModel(UserLog.name)
+    private readonly userLogModel: Model<UserLogDocument>,
+    @InjectModel(FaceDescriptor.name)
+    private readonly faceDescriptorModel: Model<FaceDescriptorDocument>,
     private readonly mqttService: MqttService
   ) {}
 
-  private async findUserOrThrow(id: number): Promise<User> {
-    const user = await this.usersRepository.findOneBy({ id });
+  private async findUserOrThrow(id: string): Promise<UserDocument> {
+    const user = await this.userModel.findById(id);
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
     return user;
   }
 
-  async initiateUserCreation(): Promise<void> {
-    try {
-      await this.mqttService.publish('create_user', 'create new user');
-    } catch (error) {
-      console.error('Failed to publish create_user message:', error);
-      throw error;
-    }
-  }
-
-  async create(createUserDto: CreateUserDto): Promise<User> {
+  async create(createUserDto: CreateUserDto): Promise<UserDocument> {
     try {
       if (isNaN(createUserDto.finger_id)) {
         throw new Error('Invalid finger_id');
       }
       
-      const existingUser = await this.usersRepository.findOne({
-        where: { finger_id: createUserDto.finger_id }
+      const existingUser = await this.userModel.findOne({
+        finger_id: createUserDto.finger_id
       });
       
       if (existingUser) {
         throw new Error(`User with finger_id ${createUserDto.finger_id} already exists`);
       }
       
-      const user = this.usersRepository.create(createUserDto);
-      return await this.usersRepository.save(user);
+      const user = new this.userModel(createUserDto);
+      return await user.save();
     } catch (error) {
       throw new Error(`Failed to create user: ${error.message}`);
     }
   }
 
-  async findAll(): Promise<User[]> {
-    return await this.usersRepository.find();
+  async findAll(): Promise<UserDocument[]> {
+    return await this.userModel.find().exec();
   }
 
-  async findOne(id: number): Promise<User> {
+  async findOne(id: string): Promise<UserDocument> {
     const cachedUser = this.userCache.get(id);
     if (cachedUser) return cachedUser;
 
@@ -76,28 +66,26 @@ export class UsersService {
     return user;
   }
 
-  async findUserByFingerID(finger_id: number): Promise<number> {
-    const user = await this.usersRepository.findOne({
-      where: { finger_id }
-    });
+  async findUserByFingerID(finger_id: number): Promise<string> {
+    const user = await this.userModel.findOne({ finger_id });
     if (!user) {
       throw new NotFoundException(`User with Finger ID ${finger_id} not found`);
     }
-    return user.id;
+    return user._id.toString();
   }
 
-  async remove(id: number): Promise<void> {
-    const user = await this.usersRepository.findOne({ 
-      where: { id }, 
-      relations: ['userlog', 'faceDescriptor'] 
-    });
+  async remove(id: string): Promise<void> {
+    const user = await this.userModel.findById(id)
+      .populate('userlog')
+      .populate('faceDescriptor');
+      
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
     }
-    await this.faceDescriptorRepository.delete({ user: { id } });
-    await this.userLogRepository.delete({ user: { id } });
 
-    await this.usersRepository.delete(id);
+    await this.faceDescriptorModel.deleteOne({ user: user._id });
+    await this.userLogModel.deleteMany({ user: user._id });
+    await this.userModel.findByIdAndDelete(id);
     
     try {
       await this.mqttService.publish('delete_user', user.finger_id.toString());
@@ -106,52 +94,82 @@ export class UsersService {
     }
   }
 
-  async saveUserLog(userId: number, createUserLogDto: CreateUserLogDto): Promise<UserLog> {
+  async saveUserLog(userId: string, createUserLogDto: CreateUserLogDto): Promise<UserLogDocument> {
     const user = await this.findOne(userId);
-    const userLog = this.userLogRepository.create({
-      user,
+    const userLog = new this.userLogModel({
+      user: user._id,
       ...createUserLogDto
     });
-    return await this.userLogRepository.save(userLog);
+    const savedLog = await userLog.save();
+    user.userlog.push(savedLog._id);
+    await user.save();
+    return savedLog;
   }
 
-  async updateUserLog(userId: number, date: Date, time_in: string, updateUserLogDto: UpdateUserLogDto): Promise<UserLog> {
-    const user = await this.findOne(userId);
-    const userLog = await this.userLogRepository.findOne({
-      where: { user, date, time_in }
-    });
+  async updateUserLog(userId: string, date: Date, time_in: string, updateUserLogDto: UpdateUserLogDto): Promise<UserLogDocument> {
+    const userObjectId = new Types.ObjectId(userId);
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const userLog = await this.userLogModel.findOne({
+      user: userObjectId,
+      date: {
+        $gte: startOfDay,
+        $lte: endOfDay
+      },
+      time_out: null
+    }).sort({ time_in: -1 });
+
     if (!userLog) {
+      console.log('No matching log found for update');
       throw new NotFoundException(`User log not found`);
     }
     Object.assign(userLog, updateUserLogDto);
-    return await this.userLogRepository.save(userLog);
+    const updatedLog = await userLog.save();
+    return updatedLog;
   }
 
-  async getLatestUserLog(userId: number): Promise<UserLog | null> {
-    const logs = await this.userLogRepository.find({
-      where: { user: { id: userId } },
-      order: { date: 'DESC', time_in: 'DESC' },
-      take: 1,
-    });
-    return logs[0] || null;
+  async getLatestUserLog(userId: string): Promise<UserLogDocument | null> {
+    const userObjectId = new Types.ObjectId(userId);
+    const latestLog = await this.userLogModel.findOne({
+      user: userObjectId
+    })
+    .sort({ date: -1, time_in: -1 })
+    .exec();
+    return latestLog;
   }
 
   async populateData(): Promise<any[]> {
-    return this.userLogRepository
-      .createQueryBuilder('log')
-      .leftJoinAndSelect('log.user', 'user')
-      .select([
-        'user.id as id',
-        'user.name as name',
-        'log.date as date',
-        'log.time_in as time_in',
-        'COALESCE(log.time_out, \'\') as time_out'
-      ])
-      .getRawMany();
+    return await this.userLogModel.aggregate([
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'user',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      { $unwind: '$user' },
+      {
+        $project: {
+          id: '$user._id',
+          name: '$user.name',
+          date: '$date',
+          time_in: '$time_in',
+          time_out: { $ifNull: ['$time_out', ''] }
+        }
+      }
+    ]).exec();
   }
 
-  private async cacheUser(user: User): Promise<void> {
-    this.userCache.set(user.id, user);
-    setTimeout(() => this.userCache.delete(user.id), this.cacheTimeout);
+  private async cacheUser(user: UserDocument): Promise<void> {
+    this.userCache.set(user._id.toString(), user);
+    setTimeout(() => this.userCache.delete(user._id.toString()), this.cacheTimeout);
+  }
+
+  async initiateUserCreation(): Promise<void> {
+    await this.mqttService.publish('enroll_fingerprint', '');
   }
 }

@@ -8,13 +8,13 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UsersModule = void 0;
 const common_1 = require("@nestjs/common");
+const mongoose_1 = require("@nestjs/mongoose");
 const users_service_1 = require("./users.service");
 const users_controller_1 = require("./users.controller");
-const typeorm_1 = require("@nestjs/typeorm");
-const user_entity_1 = require("./entities/user.entity");
+const user_schema_1 = require("./schemas/user.schema");
+const user_log_schema_1 = require("./schemas/user-log.schema");
+const face_descriptor_schema_1 = require("./schemas/face-descriptor.schema");
 const mqtt_module_1 = require("../mqtt/mqtt.module");
-const user_log_entity_1 = require("./entities/user_log.entity");
-const face_descriptor_entity_1 = require("./entities/face-descriptor.entity");
 const face_recognition_service_1 = require("./face-recognition.service");
 let UsersModule = class UsersModule {
 };
@@ -22,7 +22,11 @@ exports.UsersModule = UsersModule;
 exports.UsersModule = UsersModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, user_log_entity_1.UserLog, face_descriptor_entity_1.FaceDescriptor]),
+            mongoose_1.MongooseModule.forFeature([
+                { name: user_schema_1.User.name, schema: user_schema_1.UserSchema },
+                { name: user_log_schema_1.UserLog.name, schema: user_log_schema_1.UserLogSchema },
+                { name: face_descriptor_schema_1.FaceDescriptor.name, schema: face_descriptor_schema_1.FaceDescriptorSchema },
+            ]),
             mqtt_module_1.MqttModule
         ],
         controllers: [users_controller_1.UsersController],

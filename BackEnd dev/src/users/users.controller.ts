@@ -1,26 +1,25 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Logger, NotFoundException, HttpException, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
 import { Ctx, MessagePattern, MqttContext, Payload } from '@nestjs/microservices';
-import { User } from './entities/user.entity';
-import { UserLog } from './entities/user_log.entity';
 import { FaceRecognitionService } from './face-recognition.service';
-import { FaceRecognitionDto } from './dto/face-recognition.dto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MqttService } from 'src/mqtt/mqtt.service';
+import { UserDocument } from './schemas/user.schema';
+import { UserLogDocument } from './schemas/user-log.schema';
+import { Types } from 'mongoose';
+import { CreateUserDto } from './dto/create-user.dto';
 
 @Controller('users')
 export class UsersController {
-  private readonly userLoginStatus = new Map<number, boolean>();
   private readonly logger = new Logger(UsersController.name);
   private readonly tempDirectory = path.join(process.cwd(), 'temporary');
 
   constructor(
     private readonly usersService: UsersService,
     private readonly faceRecognitionService: FaceRecognitionService,
-    private readonly mqttService : MqttService
+    private readonly mqttService: MqttService
   ) {
     if (!fs.existsSync(this.tempDirectory)) {
       fs.mkdirSync(this.tempDirectory, { recursive: true });
@@ -37,6 +36,10 @@ export class UsersController {
       throw error;
     }
   }
+  @Post('create_new_user')
+  async createNewUser(@Body() createUserDto : CreateUserDto){
+    await this.usersService.create(createUserDto);
+  }
 
   @Get()
   findAll() {
@@ -45,12 +48,12 @@ export class UsersController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.usersService.findOne(+id);
+    return this.usersService.findOne(id);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.usersService.remove(+id);
+    return this.usersService.remove(id);
   }
 
   @Post(':id/add-face')
@@ -63,7 +66,7 @@ export class UsersController {
       const tempPath = path.join(process.cwd(), 'temporary', `temp-${Date.now()}.jpg`);
       fs.writeFileSync(tempPath, file.buffer);
 
-      const addedUser = await this.faceRecognitionService.addFaceDescriptor(+id,tempPath);
+      const addedUser = await this.faceRecognitionService.addFaceDescriptor(id,tempPath);
       fs.unlinkSync(tempPath);
 
       return {
@@ -107,7 +110,7 @@ export class UsersController {
     } catch (error) {
       return { success: false, message: error.message };
     } finally {
-      if (tempPath) await fs.promises.unlink(tempPath).catch(() => {});
+      //if (tempPath) await fs.promises.unlink(tempPath).catch(() => {});
     }
   }
 
@@ -144,53 +147,60 @@ export class UsersController {
   }
   
 
-  private async handleUserLogin(user: User, latestUserLog: UserLog | null): Promise<void> {
-    const userLog = new UserLog();
-    userLog.user = user;
-    userLog.date = new Date();
-    userLog.time_in = new Date().toTimeString().split(' ')[0];
+  private async handleUserLogin(user: UserDocument, latestUserLog: UserLogDocument | null): Promise<void> {
+    const currentDate = new Date();
+    const timeIn = currentDate.toTimeString().split(' ')[0];
     
-    this.logger.log(`${user.name} logged in at ${userLog.time_in}`);
+    this.logger.log(`${user.name} logged in at ${timeIn}`);
     
-    await this.usersService.saveUserLog(user.id, {
-      date: userLog.date,
-      time_in: userLog.time_in,
-      time_out: null,
+    await this.usersService.saveUserLog(user._id.toString(), {
+      date: currentDate,
+      time_in: timeIn,
+      time_out: null
     });
-    
-    this.userLoginStatus.set(user.id, true);
   }
-
-  private async handleUserLogout(user: User, latestUserLog: UserLog): Promise<void> {
-    const time_out = new Date().toTimeString().split(' ')[0];
-    this.logger.log(`${user.name} logged out at ${time_out}`);
+  
+  private async handleUserLogout(user: UserDocument, latestUserLog: UserLogDocument): Promise<void> {
+    const timeOut = new Date().toTimeString().split(' ')[0];
+    this.logger.log(`${user.name} logged out at ${timeOut}`);
     
     await this.usersService.updateUserLog(
-      user.id, 
-      latestUserLog.date, 
-      latestUserLog.time_in, 
-      { time_out }
+      user._id.toString(),
+      latestUserLog.date,
+      latestUserLog.time_in,
+      { time_out: timeOut }
     );
-    
-    this.userLoginStatus.set(user.id, false);
   }
 
   private async processAttendance(data: string): Promise<void> {
     try {
-      const userId = Number(data);
-      if (isNaN(userId)) {
-        throw new Error('Invalid user ID');
+      const user = await this.usersService.findOne(data);
+      const latestUserLog = await this.usersService.getLatestUserLog(data);
+      
+      const currentTime = new Date();
+      
+      if (!latestUserLog) {
+        await this.handleUserLogin(user, null);
+        return;
       }
-
-      const user = await this.usersService.findOne(userId);
-      const latestUserLog = await this.usersService.getLatestUserLog(userId);
-      const isLoggedIn = this.userLoginStatus.get(userId) ?? false;
-
-      await (isLoggedIn && latestUserLog?.time_out === null
-        ? this.handleUserLogout(user, latestUserLog)
-        : this.handleUserLogin(user, latestUserLog));
+      /*const logDate = new Date(latestUserLog.date);
+      if (logDate.toDateString() !== currentTime.toDateString()) {
+        await this.handleUserLogin(user, latestUserLog);
+        return;
+      }*/
+  
+      // Same day - check if it's a login or logout
+      if (!latestUserLog.time_out) {
+        // No time_out
+        await this.handleUserLogout(user, latestUserLog);
+      } else {
+        // Has time_out 
+        await this.handleUserLogin(user, latestUserLog);
+      }
+      
     } catch (error) {
       this.logger.error(`Error processing attendance: ${error.message}`);
+      throw error;
     }
   }
 

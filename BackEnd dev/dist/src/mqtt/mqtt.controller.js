@@ -16,42 +16,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MqttController = void 0;
 const common_1 = require("@nestjs/common");
 const microservices_1 = require("@nestjs/microservices");
-const publish_dto_1 = require("./dto/publish.dto");
-const rxjs_1 = require("rxjs");
 let MqttController = MqttController_1 = class MqttController {
     constructor(client) {
         this.client = client;
         this.logger = new common_1.Logger(MqttController_1.name);
     }
-    async publishMessage(publishMessageDto) {
-        try {
-            await (0, rxjs_1.lastValueFrom)(this.client.emit(publishMessageDto.topic, publishMessageDto.message));
-        }
-        catch (error) {
-            this.logger.error('Failed to publish message', error);
-            throw error;
-        }
-    }
-    getNotifications(data, context) {
-        this.logger.log(`Received message from topic ${context.getTopic()}: ${data}`);
-    }
 };
 exports.MqttController = MqttController;
-__decorate([
-    (0, common_1.Post)('publish'),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [publish_dto_1.PublishMessageDto]),
-    __metadata("design:returntype", Promise)
-], MqttController.prototype, "publishMessage", null);
-__decorate([
-    (0, microservices_1.MessagePattern)('test_topic'),
-    __param(0, (0, microservices_1.Payload)()),
-    __param(1, (0, microservices_1.Ctx)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, microservices_1.MqttContext]),
-    __metadata("design:returntype", void 0)
-], MqttController.prototype, "getNotifications", null);
 exports.MqttController = MqttController = MqttController_1 = __decorate([
     (0, common_1.Controller)('mqtt'),
     __param(0, (0, common_1.Inject)('MQTT_CLIENT')),

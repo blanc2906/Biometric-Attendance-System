@@ -23,35 +23,54 @@ let ExcelExportService = class ExcelExportService {
         if (!data || data.length === 0) {
             throw new common_1.NotFoundException("No data available");
         }
-        const rows = data.map(doc => Object.values(doc));
         const workbook = new exceljs_1.Workbook();
-        const sheet = workbook.addWorksheet('sheet1');
-        rows.unshift(Object.keys(data[0]));
-        sheet.addRows(rows);
+        const sheet = workbook.addWorksheet('Attendance Report');
+        const headers = ['ID', 'Name', 'Date', 'Time In', 'Time Out'];
+        sheet.addRow(headers);
+        data.forEach(record => {
+            sheet.addRow([
+                record.id,
+                record.name,
+                new Date(record.date).toLocaleDateString(),
+                record.time_in,
+                record.time_out || ''
+            ]);
+        });
         this.styleSheet(sheet);
-        const downloadPath = (0, path_1.join)(process.env.USERPROFILE || '', 'Downloads', 'MyExcelSheet.xlsx');
+        const downloadPath = (0, path_1.join)(process.env.USERPROFILE || '', 'Downloads', 'AttendanceReport.xlsx');
         try {
             await workbook.xlsx.writeFile(downloadPath);
+            return downloadPath;
         }
         catch (error) {
             throw new common_1.BadRequestException(`Error writing Excel file: ${error.message}`);
         }
-        return downloadPath;
     }
     styleSheet(sheet) {
-        sheet.getColumn(1).width = 5.5;
-        sheet.getColumn(2).width = 15.5;
-        sheet.getColumn(3).width = 15.5;
-        sheet.getRow(1).height = 30.5;
-        sheet.getRow(1).font = { size: 11.5, bold: true, color: { argb: 'FFFFFF' } };
-        sheet.getRow(1).fill = { type: `pattern`, pattern: `solid`, bgColor: { argb: '000000', fgColor: { argb: '000000' } } };
-        sheet.getRow(1).alignment = { vertical: 'middle', horizonal: "center", wrapText: true };
-        sheet.getRow(1).border = {
-            top: { style: 'thin', color: { argb: '000000' } },
-            left: { style: 'thin', color: { argb: 'FFFFFF' } },
-            bottom: { style: 'thin', color: { argb: '000000' } },
-            right: { style: 'thin', color: { argb: 'FFFFFF' } }
+        sheet.getColumn(1).width = 15;
+        sheet.getColumn(2).width = 20;
+        sheet.getColumn(3).width = 15;
+        sheet.getColumn(4).width = 15;
+        sheet.getColumn(5).width = 15;
+        const headerRow = sheet.getRow(1);
+        headerRow.height = 30;
+        headerRow.font = { size: 12, bold: true, color: { argb: 'FFFFFF' } };
+        headerRow.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: '000000' }
         };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        sheet.eachRow((row) => {
+            row.eachCell((cell) => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+        });
     }
 };
 exports.ExcelExportService = ExcelExportService;
