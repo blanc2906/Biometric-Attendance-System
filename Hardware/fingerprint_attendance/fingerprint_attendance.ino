@@ -98,15 +98,13 @@ void callback(char *topic, byte *payload, unsigned int length) {
   Serial.println(message);
 
   if (strcmp(topic, "create_user") == 0) {
-    // Check for the create new user message pattern
-    if (strstr(message, "create new user") != NULL) {
-      Serial.println("Starting enrollment mode...");
-      uint8_t newId = enrollFingerprint();
-      if (newId > 0) {
-        char idStr[5];
-        itoa(newId, idStr, 10);
-        mqtt_client.publish("create_new_user", idStr);
-      }
+    Serial.println("Starting enrollment process...");
+    uint8_t newId = enrollFingerprint();
+    
+    if (newId > 0) {
+        Serial.printf("Successfully enrolled fingerprint for ID #%d\n", newId);
+    } else {
+        Serial.println("Enrollment failed");
     }
   } 
   else if (strcmp(topic, "delete_user") == 0) {

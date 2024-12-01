@@ -17,9 +17,13 @@ let FaceDescriptor = class FaceDescriptor {
 };
 exports.FaceDescriptor = FaceDescriptor;
 __decorate([
-    (0, mongoose_1.Prop)({ type: [Number], required: true }),
-    __metadata("design:type", Array)
+    (0, mongoose_1.Prop)({ type: String, required: true }),
+    __metadata("design:type", String)
 ], FaceDescriptor.prototype, "descriptor", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: String, required: true }),
+    __metadata("design:type", String)
+], FaceDescriptor.prototype, "iv", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'User', required: true, unique: true }),
     __metadata("design:type", user_schema_1.User)

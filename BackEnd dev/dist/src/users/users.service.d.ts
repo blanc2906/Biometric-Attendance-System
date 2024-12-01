@@ -1,9 +1,9 @@
-import { CreateUserDto } from './dto/create-user.dto';
+import { CreateUserDto } from './dto/user.dto';
 import { Model } from 'mongoose';
 import { UserDocument } from './schemas/user.schema';
 import { UserLogDocument } from './schemas/user-log.schema';
-import { CreateUserLogDto } from './dto/create-user_log.dto';
-import { UpdateUserLogDto } from './dto/update-user_log.dto';
+import { CreateUserLogDto } from './dto/user-log.dto';
+import { UpdateUserLogDto } from './dto/user-log.dto';
 import { MqttService } from 'src/mqtt/mqtt.service';
 import { FaceDescriptorDocument } from './schemas/face-descriptor.schema';
 export declare class UsersService {

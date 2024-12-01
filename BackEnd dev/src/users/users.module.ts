@@ -7,6 +7,7 @@ import { UserLog, UserLogSchema } from './schemas/user-log.schema';
 import { FaceDescriptor, FaceDescriptorSchema } from './schemas/face-descriptor.schema';
 import { MqttModule } from 'src/mqtt/mqtt.module';
 import { FaceRecognitionService } from './face-recognition.service';
+import { EncryptionService } from './encryption.service';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { FaceRecognitionService } from './face-recognition.service';
     MqttModule
   ],
   controllers: [UsersController],
-  providers: [UsersService, FaceRecognitionService],
+  providers: [UsersService, FaceRecognitionService, EncryptionService],
   exports: [UsersService]
 })
 export class UsersModule {}

@@ -22,7 +22,7 @@ const fs = require("fs");
 const path = require("path");
 const platform_express_1 = require("@nestjs/platform-express");
 const mqtt_service_1 = require("../mqtt/mqtt.service");
-const create_user_dto_1 = require("./dto/create-user.dto");
+const user_dto_1 = require("./dto/user.dto");
 let UsersController = UsersController_1 = class UsersController {
     constructor(usersService, faceRecognitionService, mqttService) {
         this.usersService = usersService;
@@ -34,17 +34,8 @@ let UsersController = UsersController_1 = class UsersController {
             fs.mkdirSync(this.tempDirectory, { recursive: true });
         }
     }
-    async create() {
-        try {
-            await this.usersService.initiateUserCreation();
-            return { message: "Fingerprint enrollment initiated" };
-        }
-        catch (error) {
-            this.logger.error(`Error initiating user creation: ${error.message}`);
-            throw error;
-        }
-    }
     async createNewUser(createUserDto) {
+        await this.usersService.initiateUserCreation();
         await this.usersService.create(createUserDto);
     }
     findAll() {
@@ -99,6 +90,8 @@ let UsersController = UsersController_1 = class UsersController {
             return { success: false, message: error.message };
         }
         finally {
+            if (tempPath)
+                await fs.promises.unlink(tempPath).catch(() => { });
         }
     }
     async handleFingerAttendance(data, context) {
@@ -107,23 +100,6 @@ let UsersController = UsersController_1 = class UsersController {
     }
     async handleFaceAttendance(data, context) {
         return this.processAttendance(data);
-    }
-    async createUser(data) {
-        try {
-            const finger_id = Number(data);
-            if (isNaN(finger_id)) {
-                this.logger.error(`Invalid finger_id received: ${data}`);
-                return;
-            }
-            const newUser = await this.usersService.create({
-                name: 'New User',
-                finger_id
-            });
-            this.logger.log(`Created new user with ID ${newUser.id} for finger ID ${finger_id}`);
-        }
-        catch (error) {
-            this.logger.error(`Error creating user: ${error.message}`);
-        }
     }
     async handleUserLogin(user, latestUserLog) {
         const currentDate = new Date();
@@ -149,6 +125,11 @@ let UsersController = UsersController_1 = class UsersController {
                 await this.handleUserLogin(user, null);
                 return;
             }
+            const logDate = new Date(latestUserLog.date);
+            if (logDate.toDateString() !== currentTime.toDateString()) {
+                await this.handleUserLogin(user, latestUserLog);
+                return;
+            }
             if (!latestUserLog.time_out) {
                 await this.handleUserLogout(user, latestUserLog);
             }
@@ -169,16 +150,10 @@ let UsersController = UsersController_1 = class UsersController {
 };
 exports.UsersController = UsersController;
 __decorate([
-    (0, common_1.Post)('create_user'),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", Promise)
-], UsersController.prototype, "create", null);
-__decorate([
     (0, common_1.Post)('create_new_user'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_user_dto_1.CreateUserDto]),
+    __metadata("design:paramtypes", [user_dto_1.CreateUserDto]),
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "createNewUser", null);
 __decorate([
@@ -212,7 +187,7 @@ __decorate([
 ], UsersController.prototype, "addFace", null);
 __decorate([
     (0, common_1.Post)('recognize'),
-    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('imageFile')),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('image')),
     __param(0, (0, common_1.UploadedFile)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -234,13 +209,6 @@ __decorate([
     __metadata("design:paramtypes", [String, microservices_1.MqttContext]),
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "handleFaceAttendance", null);
-__decorate([
-    (0, microservices_1.MessagePattern)('create_new_user'),
-    __param(0, (0, microservices_1.Payload)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", Promise)
-], UsersController.prototype, "createUser", null);
 exports.UsersController = UsersController = UsersController_1 = __decorate([
     (0, common_1.Controller)('users'),
     __metadata("design:paramtypes", [users_service_1.UsersService,

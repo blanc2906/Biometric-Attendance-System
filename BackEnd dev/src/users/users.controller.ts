@@ -9,7 +9,7 @@ import { MqttService } from 'src/mqtt/mqtt.service';
 import { UserDocument } from './schemas/user.schema';
 import { UserLogDocument } from './schemas/user-log.schema';
 import { Types } from 'mongoose';
-import { CreateUserDto } from './dto/create-user.dto';
+import { CreateUserDto } from './dto/user.dto';
 
 @Controller('users')
 export class UsersController {
@@ -25,19 +25,9 @@ export class UsersController {
       fs.mkdirSync(this.tempDirectory, { recursive: true });
     }
   }
-
-  @Post('create_user')
-  async create() {
-    try {
-      await this.usersService.initiateUserCreation();
-      return { message: "Fingerprint enrollment initiated" };
-    } catch (error) {
-      this.logger.error(`Error initiating user creation: ${error.message}`);
-      throw error;
-    }
-  }
-  @Post('create_new_user')
+  @Post('create-user')
   async createNewUser(@Body() createUserDto : CreateUserDto){
+    await this.usersService.initiateUserCreation()
     await this.usersService.create(createUserDto);
   }
 
@@ -87,7 +77,7 @@ export class UsersController {
   }
 
   @Post('recognize')
-  @UseInterceptors(FileInterceptor('imageFile'))
+  @UseInterceptors(FileInterceptor('image'))
   async recognizeFaceFromCamera(@UploadedFile() file: Express.Multer.File) {
     let tempPath: string | null = null;
     try {
@@ -110,7 +100,7 @@ export class UsersController {
     } catch (error) {
       return { success: false, message: error.message };
     } finally {
-      //if (tempPath) await fs.promises.unlink(tempPath).catch(() => {});
+      if (tempPath) await fs.promises.unlink(tempPath).catch(() => {});
     }
   }
 
@@ -125,27 +115,6 @@ export class UsersController {
   async handleFaceAttendance(@Payload() data: string, @Ctx() context: MqttContext) {
     return this.processAttendance(data);
   }
-
-  @MessagePattern('create_new_user')
-  async createUser(@Payload() data: string) {
-    try {
-      const finger_id = Number(data);
-      
-      if (isNaN(finger_id)) {
-        this.logger.error(`Invalid finger_id received: ${data}`);
-        return;
-      }
-      
-      const newUser = await this.usersService.create({
-        name: 'New User',
-        finger_id
-      });
-      this.logger.log(`Created new user with ID ${newUser.id} for finger ID ${finger_id}`);
-    } catch (error) {
-      this.logger.error(`Error creating user: ${error.message}`);
-    }
-  }
-  
 
   private async handleUserLogin(user: UserDocument, latestUserLog: UserLogDocument | null): Promise<void> {
     const currentDate = new Date();
@@ -183,18 +152,16 @@ export class UsersController {
         await this.handleUserLogin(user, null);
         return;
       }
-      /*const logDate = new Date(latestUserLog.date);
+      const logDate = new Date(latestUserLog.date);
       if (logDate.toDateString() !== currentTime.toDateString()) {
         await this.handleUserLogin(user, latestUserLog);
         return;
-      }*/
+      }
   
-      // Same day - check if it's a login or logout
+
       if (!latestUserLog.time_out) {
-        // No time_out
         await this.handleUserLogout(user, latestUserLog);
       } else {
-        // Has time_out 
         await this.handleUserLogin(user, latestUserLog);
       }
       

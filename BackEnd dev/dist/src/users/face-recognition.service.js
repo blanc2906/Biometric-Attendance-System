@@ -22,10 +22,12 @@ const face_descriptor_schema_1 = require("./schemas/face-descriptor.schema");
 const user_schema_1 = require("./schemas/user.schema");
 const path = require("path");
 const canvas_1 = require("canvas");
+const encryption_service_1 = require("./encryption.service");
 let FaceRecognitionService = class FaceRecognitionService {
-    constructor(faceDescriptorModel, userModel) {
+    constructor(faceDescriptorModel, userModel, encryptionService) {
         this.faceDescriptorModel = faceDescriptorModel;
         this.userModel = userModel;
+        this.encryptionService = encryptionService;
         this.modelPath = path.join(process.cwd(), 'models');
         this.canvas = (0, canvas_1.createCanvas)(1024, 1024);
         global.HTMLCanvasElement = canvas_1.Canvas;
@@ -75,7 +77,10 @@ let FaceRecognitionService = class FaceRecognitionService {
             }
             const existingFaceDescriptors = await this.faceDescriptorModel.find().populate('user');
             if (existingFaceDescriptors.length > 0) {
-                const labeledDescriptors = existingFaceDescriptors.map(fd => new faceapi.LabeledFaceDescriptors(fd.user._id.toString(), [new Float32Array(fd.descriptor)]));
+                const labeledDescriptors = existingFaceDescriptors.map(fd => {
+                    const decryptedDescriptor = this.encryptionService.decrypt(fd.descriptor, fd.iv);
+                    return new faceapi.LabeledFaceDescriptors(fd.user._id.toString(), [new Float32Array(decryptedDescriptor)]);
+                });
                 const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
                 const match = faceMatcher.findBestMatch(detection.descriptor);
                 if (match.distance < 0.6) {
@@ -85,8 +90,10 @@ let FaceRecognitionService = class FaceRecognitionService {
             if (user.faceDescriptor) {
                 await this.faceDescriptorModel.findByIdAndDelete(user.faceDescriptor);
             }
+            const { encryptedData, iv } = this.encryptionService.encrypt(Array.from(detection.descriptor));
             const faceDescriptor = new this.faceDescriptorModel({
-                descriptor: Array.from(detection.descriptor),
+                descriptor: encryptedData,
+                iv: iv,
                 user: user._id
             });
             const savedDescriptor = await faceDescriptor.save();
@@ -114,7 +121,10 @@ let FaceRecognitionService = class FaceRecognitionService {
             if (faceDescriptors.length === 0) {
                 return null;
             }
-            const labeledDescriptors = faceDescriptors.map(fd => new faceapi.LabeledFaceDescriptors(fd.user._id.toString(), [new Float32Array(fd.descriptor)]));
+            const labeledDescriptors = faceDescriptors.map(fd => {
+                const decryptedDescriptor = this.encryptionService.decrypt(fd.descriptor, fd.iv);
+                return new faceapi.LabeledFaceDescriptors(fd.user._id.toString(), [new Float32Array(decryptedDescriptor)]);
+            });
             const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
             const match = faceMatcher.findBestMatch(detection.descriptor);
             if (match.distance < 0.6) {
@@ -136,6 +146,7 @@ exports.FaceRecognitionService = FaceRecognitionService = __decorate([
     __param(0, (0, mongoose_1.InjectModel)(face_descriptor_schema_1.FaceDescriptor.name)),
     __param(1, (0, mongoose_1.InjectModel)(user_schema_1.User.name)),
     __metadata("design:paramtypes", [mongoose_2.Model,
-        mongoose_2.Model])
+        mongoose_2.Model,
+        encryption_service_1.EncryptionService])
 ], FaceRecognitionService);
 //# sourceMappingURL=face-recognition.service.js.map

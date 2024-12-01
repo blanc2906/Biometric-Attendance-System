@@ -3,11 +3,12 @@
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "esp_camera.h"
+#include "secret.h"
 
-const char* ssid = "Phong 304";
-const char* password = "Buivietlang29062003";
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 
-String serverName = "192.168.1.3";
+String serverName = "192.168.131.12";
 String serverPath = "/users/recognize";
 
 const int serverPort = 3000;
@@ -118,8 +119,8 @@ String sendPhoto() {
 
   if (client.connect(serverName.c_str(), serverPort)) {
     Serial.println("Connection successful!");    
-    String head = "--RandomNerdTutorials\r\nContent-Disposition: form-data; name=\"imageFile\"; filename=\"esp32-cam.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n";
-    String tail = "\r\n--RandomNerdTutorials--\r\n";
+    String head = "--data\r\nContent-Type: image/jpeg\r\n\r\n";
+    String tail = "\r\n--data--\r\n";
 
     uint32_t imageLen = fb->len;
     uint32_t extraLen = head.length() + tail.length();
@@ -128,7 +129,7 @@ String sendPhoto() {
     client.println("POST " + serverPath + " HTTP/1.1");
     client.println("Host: " + serverName);
     client.println("Content-Length: " + String(totalLen));
-    client.println("Content-Type: multipart/form-data; boundary=RandomNerdTutorials");
+    client.println("Content-Type: multipart/form-data; boundary=data");
     client.println();
     client.print(head);
   

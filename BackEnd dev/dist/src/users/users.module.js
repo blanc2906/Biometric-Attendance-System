@@ -16,6 +16,7 @@ const user_log_schema_1 = require("./schemas/user-log.schema");
 const face_descriptor_schema_1 = require("./schemas/face-descriptor.schema");
 const mqtt_module_1 = require("../mqtt/mqtt.module");
 const face_recognition_service_1 = require("./face-recognition.service");
+const encryption_service_1 = require("./encryption.service");
 let UsersModule = class UsersModule {
 };
 exports.UsersModule = UsersModule;
@@ -30,7 +31,7 @@ exports.UsersModule = UsersModule = __decorate([
             mqtt_module_1.MqttModule
         ],
         controllers: [users_controller_1.UsersController],
-        providers: [users_service_1.UsersService, face_recognition_service_1.FaceRecognitionService],
+        providers: [users_service_1.UsersService, face_recognition_service_1.FaceRecognitionService, encryption_service_1.EncryptionService],
         exports: [users_service_1.UsersService]
     })
 ], UsersModule);

@@ -8,11 +8,14 @@ export type FaceDescriptorDocument = FaceDescriptor & Document;
 export class FaceDescriptor {
     _id: Types.ObjectId;
 
-  @Prop({ type: [Number], required: true })
-  descriptor: number[];
+    @Prop({ type: String, required: true })
+    descriptor: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, unique: true })
-  user: User;
+    @Prop({ type: String, required: true })
+    iv: string;
+
+    @Prop({ type: Types.ObjectId, ref: 'User', required: true, unique: true })
+    user: User;
 }
 
 export const FaceDescriptorSchema = SchemaFactory.createForClass(FaceDescriptor);

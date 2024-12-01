@@ -24,4 +24,4 @@ __decorate([
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", Number)
 ], CreateUserDto.prototype, "finger_id", void 0);
-//# sourceMappingURL=create-user.dto.js.map
+//# sourceMappingURL=user.dto.js.map

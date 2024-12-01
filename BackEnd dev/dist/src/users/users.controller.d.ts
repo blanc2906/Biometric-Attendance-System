@@ -4,7 +4,7 @@ import { FaceRecognitionService } from './face-recognition.service';
 import { MqttService } from 'src/mqtt/mqtt.service';
 import { UserDocument } from './schemas/user.schema';
 import { Types } from 'mongoose';
-import { CreateUserDto } from './dto/create-user.dto';
+import { CreateUserDto } from './dto/user.dto';
 export declare class UsersController {
     private readonly usersService;
     private readonly faceRecognitionService;
@@ -12,9 +12,6 @@ export declare class UsersController {
     private readonly logger;
     private readonly tempDirectory;
     constructor(usersService: UsersService, faceRecognitionService: FaceRecognitionService, mqttService: MqttService);
-    create(): Promise<{
-        message: string;
-    }>;
     createNewUser(createUserDto: CreateUserDto): Promise<void>;
     findAll(): Promise<UserDocument[]>;
     findOne(id: string): Promise<UserDocument>;
@@ -42,7 +39,6 @@ export declare class UsersController {
     }>;
     handleFingerAttendance(data: string, context: MqttContext): Promise<void>;
     handleFaceAttendance(data: string, context: MqttContext): Promise<void>;
-    createUser(data: string): Promise<void>;
     private handleUserLogin;
     private handleUserLogout;
     private processAttendance;

@@ -1,18 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
+import { CreateUserDto } from './dto/user.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
 import { UserLog, UserLogDocument } from './schemas/user-log.schema';
-import { CreateUserLogDto } from './dto/create-user_log.dto';
-import { UpdateUserLogDto } from './dto/update-user_log.dto';
+import { CreateUserLogDto } from './dto/user-log.dto';
+import { UpdateUserLogDto } from './dto/user-log.dto';
 import { MqttService } from 'src/mqtt/mqtt.service';
 import { FaceDescriptor, FaceDescriptorDocument } from './schemas/face-descriptor.schema';
 
 @Injectable()
 export class UsersService {
   private readonly userCache = new Map<string, UserDocument>();
-  private readonly cacheTimeout = 5 * 60 * 1000; // 5 minutes
+  private readonly cacheTimeout = 5 * 60 * 1000; 
 
   constructor(
     @InjectModel(User.name)

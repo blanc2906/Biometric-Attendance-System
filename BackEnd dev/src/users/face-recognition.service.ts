@@ -8,6 +8,7 @@ import { User, UserDocument } from './schemas/user.schema';
 import * as path from 'path';
 import { Canvas, createCanvas, Image, loadImage } from 'canvas';
 import { Document } from 'mongoose';
+import { EncryptionService } from './encryption.service';
 
 @Injectable()
 export class FaceRecognitionService implements OnModuleInit {
@@ -18,7 +19,8 @@ export class FaceRecognitionService implements OnModuleInit {
         @InjectModel(FaceDescriptor.name)
         private faceDescriptorModel: Model<FaceDescriptorDocument>,
         @InjectModel(User.name)
-        private userModel: Model<UserDocument>
+        private userModel: Model<UserDocument>,
+        private encryptionService: EncryptionService
     ) {
         this.canvas = createCanvas(1024, 1024);
         (global as any).HTMLCanvasElement = Canvas;
@@ -76,12 +78,16 @@ export class FaceRecognitionService implements OnModuleInit {
             const existingFaceDescriptors = await this.faceDescriptorModel.find().populate('user');
 
             if (existingFaceDescriptors.length > 0) {
-                const labeledDescriptors = existingFaceDescriptors.map(fd => 
-                    new faceapi.LabeledFaceDescriptors(
+                const labeledDescriptors = existingFaceDescriptors.map(fd => {
+                    const decryptedDescriptor = this.encryptionService.decrypt(
+                        fd.descriptor,
+                        fd.iv
+                    );
+                    return new faceapi.LabeledFaceDescriptors(
                         fd.user._id.toString(),
-                        [new Float32Array(fd.descriptor)]
-                    )
-                );
+                        [new Float32Array(decryptedDescriptor)]
+                    );
+                });
 
                 const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
                 const match = faceMatcher.findBestMatch(detection.descriptor);
@@ -95,8 +101,13 @@ export class FaceRecognitionService implements OnModuleInit {
                 await this.faceDescriptorModel.findByIdAndDelete(user.faceDescriptor);
             }
 
+            const { encryptedData, iv } = this.encryptionService.encrypt(
+                Array.from(detection.descriptor)
+            );
+
             const faceDescriptor = new this.faceDescriptorModel({
-                descriptor: Array.from(detection.descriptor),
+                descriptor: encryptedData,
+                iv: iv,
                 user: user._id
             });
 
@@ -133,12 +144,16 @@ export class FaceRecognitionService implements OnModuleInit {
                 return null;
             }
 
-            const labeledDescriptors = faceDescriptors.map(fd => 
-                new faceapi.LabeledFaceDescriptors(
+            const labeledDescriptors = faceDescriptors.map(fd => {
+                const decryptedDescriptor = this.encryptionService.decrypt(
+                    fd.descriptor,
+                    fd.iv
+                );
+                return new faceapi.LabeledFaceDescriptors(
                     fd.user._id.toString(),
-                    [new Float32Array(fd.descriptor)]
-                )
-            );
+                    [new Float32Array(decryptedDescriptor)]
+                );
+            });
 
             const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
             const match = faceMatcher.findBestMatch(detection.descriptor);
