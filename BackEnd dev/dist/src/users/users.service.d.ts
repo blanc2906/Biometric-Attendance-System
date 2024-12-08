@@ -19,6 +19,7 @@ export declare class UsersService {
     findAll(): Promise<UserDocument[]>;
     findOne(id: string): Promise<UserDocument>;
     findUserByFingerID(finger_id: number): Promise<string>;
+    updateUserFingerPrint(id: string): Promise<void>;
     remove(id: string): Promise<void>;
     saveUserLog(userId: string, createUserLogDto: CreateUserLogDto): Promise<UserLogDocument>;
     updateUserLog(userId: string, date: Date, time_in: string, updateUserLogDto: UpdateUserLogDto): Promise<UserLogDocument>;

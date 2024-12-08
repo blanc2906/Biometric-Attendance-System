@@ -72,6 +72,10 @@ let UsersService = class UsersService {
         }
         return user._id.toString();
     }
+    async updateUserFingerPrint(id) {
+        const user = await this.userModel.findById(id);
+        await this.mqttService.publish("update_fingerprint", user.finger_id.toString());
+    }
     async remove(id) {
         const user = await this.userModel.findById(id)
             .populate('userlog')
