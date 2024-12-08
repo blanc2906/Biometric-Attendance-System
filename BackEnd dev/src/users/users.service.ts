@@ -74,6 +74,11 @@ export class UsersService {
     return user._id.toString();
   }
 
+  async updateUserFingerPrint(id : string) {
+    const user = await this.userModel.findById(id);
+    await this.mqttService.publish("update_fingerprint", user.finger_id.toString())
+  }
+
   async remove(id: string): Promise<void> {
     const user = await this.userModel.findById(id)
       .populate('userlog')
@@ -154,7 +159,7 @@ export class UsersService {
       { $unwind: '$user' },
       {
         $project: {
-          id: '$user._id',
+          id: '$user.id_nvien',
           name: '$user.name',
           date: '$date',
           time_in: '$time_in',

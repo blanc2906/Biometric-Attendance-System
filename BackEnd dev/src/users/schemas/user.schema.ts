@@ -9,6 +9,9 @@ export type UserDocument = User & Document;
 @Schema()
 export class User {
   _id: Types.ObjectId;
+
+  @Prop({required: true, unique: true})
+  id_nvien: string;
   
   @Prop({ required: true })
   name: string;

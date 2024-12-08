@@ -150,7 +150,7 @@ let UsersController = UsersController_1 = class UsersController {
 };
 exports.UsersController = UsersController;
 __decorate([
-    (0, common_1.Post)('create_new_user'),
+    (0, common_1.Post)('create-user'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [user_dto_1.CreateUserDto]),

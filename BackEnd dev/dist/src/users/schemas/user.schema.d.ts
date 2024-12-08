@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 export type UserDocument = User & Document;
 export declare class User {
     _id: Types.ObjectId;
+    id_nvien: string;
     name: string;
     finger_id: number;
     faceDescriptor: FaceDescriptor;

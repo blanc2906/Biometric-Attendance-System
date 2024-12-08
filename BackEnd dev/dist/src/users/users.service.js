@@ -144,7 +144,7 @@ let UsersService = class UsersService {
             { $unwind: '$user' },
             {
                 $project: {
-                    id: '$user._id',
+                    id: '$user.id_nvien',
                     name: '$user.name',
                     date: '$date',
                     time_in: '$time_in',
