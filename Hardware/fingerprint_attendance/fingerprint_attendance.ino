@@ -137,6 +137,7 @@ void reconnect() {
       Serial.println("Reconnected to MQTT broker");
       mqtt_client.subscribe(topic);
       mqtt_client.subscribe("delete_user");
+      mqtt_client.subscribe("create_user"); 
     } else {
       Serial.print("Failed to connect, state: ");
       Serial.println(mqtt_client.state());
@@ -331,7 +332,7 @@ bool getFingerprintEnroll(uint8_t id) {
       Serial.println("Image taken");
       break;
     case FINGERPRINT_NOFINGER:
-      Serial.print(".");  // Changed to print instead of println for cleaner output
+      Serial.print(".");
       break;
     case FINGERPRINT_PACKETRECIEVEERR:
       Serial.println("Communication error");
@@ -343,13 +344,28 @@ bool getFingerprintEnroll(uint8_t id) {
       Serial.println("Unknown error");
       break;
     }
-    delay(100);  // Add small delay to prevent overwhelming the sensor
+    delay(100);
   }
 
-  // Convert first image to template
+  // Convert first image to template for checking duplicates
   p = finger.image2Tz(1);
   if (p != FINGERPRINT_OK) {
     Serial.println("Image conversion failed");
+    return false;
+  }
+
+  // Check for duplicate fingerprint
+  p = finger.fingerFastSearch();
+  if (p == FINGERPRINT_OK) {
+    // Fingerprint already exists
+    Serial.print("This fingerprint already exists with ID #");
+    Serial.println(finger.fingerID);
+    return false;
+  } else if (p == FINGERPRINT_NOTFOUND) {
+    // Fingerprint is new, proceed with enrollment
+    Serial.println("No duplicate found, proceeding with enrollment");
+  } else {
+    Serial.println("Error during duplicate check");
     return false;
   }
 
@@ -358,7 +374,7 @@ bool getFingerprintEnroll(uint8_t id) {
   p = 0;
   while (p != FINGERPRINT_NOFINGER) {
     p = finger.getImage();
-    delay(100);  // Add small delay
+    delay(100);
   }
 
   // Second reading
@@ -383,7 +399,7 @@ bool getFingerprintEnroll(uint8_t id) {
       Serial.println("Unknown error");
       break;
     }
-    delay(100);  // Add small delay
+    delay(100);
   }
 
   // Convert second image to template
