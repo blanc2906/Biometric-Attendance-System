@@ -10,17 +10,23 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
-const mqtt_module_1 = require("./mqtt/mqtt.module");
+const mqtt_module_1 = require("./modules/mqtt/mqtt.module");
 const database_module_1 = require("./database/database.module");
-const users_module_1 = require("./users/users.module");
+const users_module_1 = require("./modules/users/users.module");
 const config_1 = require("@nestjs/config");
-const excel_export_module_1 = require("./excel-export/excel-export.module");
+const excel_export_module_1 = require("./modules/excel-export/excel-export.module");
+const shared_module_1 = require("./shared/shared.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
-        imports: [mqtt_module_1.MqttModule, database_module_1.DatabaseModule, users_module_1.UsersModule, config_1.ConfigModule.forRoot({ isGlobal: true }), excel_export_module_1.ExcelExportModule],
+        imports: [mqtt_module_1.MqttModule,
+            database_module_1.DatabaseModule,
+            users_module_1.UsersModule,
+            config_1.ConfigModule.forRoot({ isGlobal: true }),
+            excel_export_module_1.ExcelExportModule,
+            shared_module_1.SharedModule],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],
     })
