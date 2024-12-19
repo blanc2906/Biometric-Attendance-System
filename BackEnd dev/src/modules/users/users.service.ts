@@ -42,9 +42,15 @@ export class UsersService {
       const existingUser = await this.userModel.findOne({
         finger_id: createUserDto.finger_id
       });
+      const existedUser = await this.userModel.findOne({
+        id_nvien: createUserDto.id_nvien
+      });
       
       if (existingUser) {
         throw new Error(`User with finger_id ${createUserDto.finger_id} already exists`);
+      }
+      if (existedUser) {
+        throw new Error(`User with id_nvien ${createUserDto.id_nvien} already exists`);
       }
       
       const user = new this.userModel(createUserDto);
@@ -67,12 +73,12 @@ export class UsersService {
     return user;
   }
 
-  async findUserByFingerID(finger_id: number): Promise<string> {
+  async findUserByFingerID(finger_id: number): Promise<any> {
     const user = await this.userModel.findOne({ finger_id });
     if (!user) {
       throw new NotFoundException(`User with Finger ID ${finger_id} not found`);
     }
-    return user._id.toString();
+    return user;
   }
 
   async updateUserFingerPrint(id : string) {

@@ -10,7 +10,7 @@ import { UserDocument } from '../../database/schemas/user.schema';
 import { UserLogDocument } from '../../database/schemas/user-log.schema';
 import { Types } from 'mongoose';
 import { CreateUserDto } from './dto/user.dto';
-import { FACE_ATTENDANCE, FINGER_ATTENDANCE } from 'src/shared/constants/mqtt.constant';
+import { FACE_ATTENDANCE, ATTENDANCE_NOTI, FINGER_ATTENDANCE } from 'src/shared/constants/mqtt.constant';
 
 @Controller('users')
 export class UsersController {
@@ -114,7 +114,13 @@ export class UsersController {
         return { success: false, message: 'No matching face found' };
       }
 
-      await this.mqttService.publish(FACE_ATTENDANCE, recognizedUser.id.toString());
+      try {
+        await this.mqttService.publish(FACE_ATTENDANCE, recognizedUser.id.toString());
+        await this.mqttService.publish(ATTENDANCE_NOTI,recognizedUser.name);
+      } catch (error) {
+        this.logger.error(`Error publishing MQTT message: ${error.message}`);
+        throw error;
+      }
 
       return { 
         success: true, 
@@ -133,8 +139,10 @@ export class UsersController {
 
   @MessagePattern(FINGER_ATTENDANCE)
   async handleFingerAttendance(@Payload() data: string, @Ctx() context: MqttContext) {
-    const userID = await this.usersService.findUserByFingerID(Number(data));
-    return this.processAttendance(userID.toString());
+    const user = await this.usersService.findUserByFingerID(Number(data));
+    await this.mqttService.publish(ATTENDANCE_NOTI, user.name)
+
+    return this.processAttendance(user._id.toString());
   }
 
   @MessagePattern(FACE_ATTENDANCE)
@@ -155,7 +163,6 @@ export class UsersController {
     const currentDate = new Date();
     const timeIn = currentDate.toTimeString().split(' ')[0];
     
-    // If there's a recent logout, ignore this login attempt
     if (latestUserLog?.time_out && this.isWithinTimeThreshold(latestUserLog.time_out, currentDate)) {
       return;
     }
@@ -172,7 +179,6 @@ export class UsersController {
     const currentTime = new Date();
     const timeOut = currentTime.toTimeString().split(' ')[0];
 
-    // If there's a recent login, ignore this logout attempt
     if (this.isWithinTimeThreshold(latestUserLog.time_in, currentTime)) {
       return;
     }
