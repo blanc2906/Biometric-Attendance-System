@@ -83,12 +83,13 @@ export class UsersController {
       fs.writeFileSync(tempPath, file.buffer);
 
       const addedUser = await this.faceRecognitionService.addFaceDescriptor(id,tempPath);
-      fs.unlinkSync(tempPath);
+      //fs.unlinkSync(tempPath);
 
       return {
         success: true,
         message: 'Face descriptor added successfully',
-        data: addedUser
+        data: addedUser,
+        tempPath        
       };
     }
     catch(error){

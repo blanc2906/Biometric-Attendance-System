@@ -5,9 +5,13 @@ const app_module_1 = require("./app.module");
 const microservices_1 = require("@nestjs/microservices");
 const config_1 = require("@nestjs/config");
 const swagger_1 = require("@nestjs/swagger");
+const path_1 = require("path");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
     const configService = app.get(config_1.ConfigService);
+    app.useStaticAssets((0, path_1.join)(process.cwd(), 'temporary'), {
+        prefix: '/temporary',
+    });
     const config = new swagger_1.DocumentBuilder()
         .setTitle('My API')
         .setDescription('My API description')
