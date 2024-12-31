@@ -9,16 +9,16 @@ export type UserDocument = User & Document;
 export class User {
   _id: Types.ObjectId;
 
-  @Prop({required: true, unique: true})
+  @Prop({ required: true, unique: true })
   id_nvien: string;
-  
+
   @Prop({ required: true })
   name: string;
 
   @Prop({ required: true, unique: true })
   finger_id: number;
 
-  @Prop({unique: true})
+  @Prop({ unique: true })
   image_path: string;
 
   @Prop({ type: Types.ObjectId, ref: 'FaceDescriptor' })

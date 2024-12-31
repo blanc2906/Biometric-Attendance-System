@@ -4,12 +4,6 @@
 #include <Adafruit_Fingerprint.h>
 #include <HardwareSerial.h>
 #include <secret.h>
-#include <LiquidCrystal_I2C.h>
-
-int lcdColumns = 16;
-int lcdRows = 2;
-
-LiquidCrystal_I2C lcd(0x27, lcdColumns, lcdRows);
 
 const char *ssid = WIFI_SSID; 
 const char *password = WIFI_PASSWORD;  
@@ -34,13 +28,6 @@ uint8_t lastUsedId = 0;
 
 void setup() {
   Serial.begin(9600);
-
-  lcd.init();
-  lcd.backlight();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Initializing...");
-
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -67,7 +54,6 @@ void setup() {
   mqtt_client.subscribe(topic);
   mqtt_client.subscribe("delete_user");
   mqtt_client.subscribe("create_user");
-  mqtt_client.subscribe("attended_success");
 
   while (!Serial); 
   delay(100);
@@ -120,30 +106,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
     } else {
         Serial.println("Enrollment failed");
     }
-  }
-
-  else if (strcmp(topic, "attended_success") == 0) {
-    // Extract name from the JSON-like message
-    char* dataStart = strstr(message, "\"data\":\"");
-    if (dataStart) {
-      dataStart += 8; // Skip "data":"
-      char* dataEnd = strchr(dataStart, '"');
-      if (dataEnd) {
-        char name[32]; // Buffer for the name
-        int len = dataEnd - dataStart;
-        strncpy(name, dataStart, len);
-        name[len] = '\0';
-        
-        // Display welcome message and name
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Welcome");
-        lcd.setCursor(0, 1);
-        lcd.print(name);
-        delay(5000);
-      }
-    }
-  }
+  } 
   else if (strcmp(topic, "delete_user") == 0) {
     // Extract finger_id from the JSON-like message
     char* dataStart = strstr(message, "\"data\":\"");
@@ -174,8 +137,6 @@ void reconnect() {
       Serial.println("Reconnected to MQTT broker");
       mqtt_client.subscribe(topic);
       mqtt_client.subscribe("delete_user");
-      mqtt_client.subscribe("create_user"); 
-      mqtt_client.subscribe("attended_success");
     } else {
       Serial.print("Failed to connect, state: ");
       Serial.println(mqtt_client.state());
@@ -215,15 +176,9 @@ uint8_t getFingerprintID() {
   uint8_t p = finger.getImage();
   switch (p) {
     case FINGERPRINT_OK:
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Image taken");
       Serial.println("Image taken");
       break;
     case FINGERPRINT_NOFINGER:
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Ready to Scan");
       return p;
     case FINGERPRINT_PACKETRECIEVEERR:
       Serial.println("Communication error");
@@ -240,9 +195,6 @@ uint8_t getFingerprintID() {
   p = finger.image2Tz();
   switch (p) {
     case FINGERPRINT_OK:
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Processing...");
       Serial.println("Image converted");
       break;
     case FINGERPRINT_IMAGEMESS:
@@ -265,20 +217,11 @@ uint8_t getFingerprintID() {
   // OK converted!
   p = finger.fingerSearch();
   if (p == FINGERPRINT_OK) {
-    // lcd.clear();
-    // lcd.setCursor(0, 0);
-    // lcd.print("Found Match!");
-    // lcd.setCursor(0, 1);
-    // lcd.print("ID #");
-    //lcd.print(finger.fingerID);
     Serial.println("Found a print match!");
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     return p;
   } else if (p == FINGERPRINT_NOTFOUND) {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("No Match Found");
     Serial.println("Did not find a match");
     return p;
   } else {
@@ -378,12 +321,6 @@ uint8_t enrollFingerprint() {
 
 bool getFingerprintEnroll(uint8_t id) {
   int p = -1;
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Place finger");
-  lcd.setCursor(0, 1);
-  lcd.print("ID #");
-  lcd.print(id);
   Serial.println("Waiting for valid finger to enroll");
   
   // First reading
@@ -391,13 +328,10 @@ bool getFingerprintEnroll(uint8_t id) {
     p = finger.getImage();
     switch (p) {
     case FINGERPRINT_OK:
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Image taken");
       Serial.println("Image taken");
       break;
     case FINGERPRINT_NOFINGER:
-      Serial.print(".");
+      Serial.print(".");  // Changed to print instead of println for cleaner output
       break;
     case FINGERPRINT_PACKETRECIEVEERR:
       Serial.println("Communication error");
@@ -409,64 +343,31 @@ bool getFingerprintEnroll(uint8_t id) {
       Serial.println("Unknown error");
       break;
     }
-    delay(100);
+    delay(100);  // Add small delay to prevent overwhelming the sensor
   }
 
-  // Convert first image to template for checking duplicates
+  // Convert first image to template
   p = finger.image2Tz(1);
   if (p != FINGERPRINT_OK) {
     Serial.println("Image conversion failed");
     return false;
   }
 
-  // Check for duplicate fingerprint
-  p = finger.fingerFastSearch();
-  if (p == FINGERPRINT_OK) {
-    // Fingerprint already exists
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Already Exists!");
-    lcd.setCursor(0, 1);
-    lcd.print("ID #");
-    lcd.print(finger.fingerID);
-    Serial.print("This fingerprint already exists with ID #");
-    Serial.println(finger.fingerID);
-    delay(5000);
-    return false;
-  } else if (p == FINGERPRINT_NOTFOUND) {
-    // Fingerprint is new, proceed with enrollment
-    Serial.println("No duplicate found, proceeding with enrollment");
-  } else {
-    Serial.println("Error during duplicate check");
-    return false;
-  }
-
   Serial.println("Remove finger");
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Remove finger");
   delay(2000);
   p = 0;
   while (p != FINGERPRINT_NOFINGER) {
     p = finger.getImage();
-    delay(100);
+    delay(100);  // Add small delay
   }
 
   // Second reading
   Serial.println("Place same finger again");
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Place finger");
-  lcd.setCursor(0, 1);
-  lcd.print("again");
   p = -1;
   while (p != FINGERPRINT_OK) {
     p = finger.getImage();
     switch (p) {
     case FINGERPRINT_OK:
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Image taken");
       Serial.println("Image taken");
       break;
     case FINGERPRINT_NOFINGER:
@@ -482,7 +383,7 @@ bool getFingerprintEnroll(uint8_t id) {
       Serial.println("Unknown error");
       break;
     }
-    delay(100);
+    delay(100);  // Add small delay
   }
 
   // Convert second image to template
@@ -505,13 +406,7 @@ bool getFingerprintEnroll(uint8_t id) {
     Serial.println("Failed to store model");
     return false;
   }
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Success!");
-  lcd.setCursor(0, 1);
-  lcd.print("ID #");
-  lcd.print(id);
-  delay(5000);
+
   Serial.println("Fingerprint enrolled successfully!");
   return true;
 }

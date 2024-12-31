@@ -7,7 +7,17 @@ export interface User {
   finger_id: number;
   userlog: string[];
   faceDescriptor: string;
+  image_path: string;
   __v: number;
+}
+
+export interface UserLog {
+  id: string;
+  user_name: string;
+  user_id: string;
+  date: string;
+  time_in: string;
+  time_out: string;
 }
 
 export const getUsers = (): Promise<User[]> => {
@@ -35,4 +45,12 @@ export const addFaceToUser = (
       "Content-Type": "multipart/form-data",
     },
   });
+};
+
+export const getUserLogs = () => {
+  return axios("/users/logs/all");
+};
+
+export const initialCreateUser = () => {
+  return axios.post("/users/init-create-user");
 };

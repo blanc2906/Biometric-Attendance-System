@@ -8,14 +8,15 @@ import { ConfigModule } from '@nestjs/config';
 import { ExcelExportModule } from './modules/excel-export/excel-export.module';
 import { SharedModule } from './shared/shared.module';
 
-
 @Module({
-  imports: [ MqttModule, 
-    DatabaseModule, 
+  imports: [
+    MqttModule,
+    DatabaseModule,
     UsersModule,
-    ConfigModule.forRoot({isGlobal: true}), 
+    ConfigModule.forRoot({ isGlobal: true }),
     ExcelExportModule,
-    SharedModule],
+    SharedModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

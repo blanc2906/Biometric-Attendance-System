@@ -10,18 +10,25 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
 
+  app.enableCors({
+    origin: 'http://localhost:3001', 
+    methods: 'GET, POST, PUT, DELETE',
+    allowedHeaders: 'Content-Type, Authorization',
+    credentials: true, 
+  });
+
   app.useStaticAssets(join(process.cwd(), 'temporary'), {
     prefix: '/temporary',
   });
 
   const config = new DocumentBuilder()
-  .setTitle('My API')
-  .setDescription('My API description')
-  .setVersion('1.0')
-  .addTag('api')
-  .build();
-  const documentFactory = () => SwaggerModule.createDocument(app,config);
-  
+    .setTitle('My API')
+    .setDescription('My API description')
+    .setVersion('1.0')
+    .addTag('api')
+    .build();
+  const documentFactory = () => SwaggerModule.createDocument(app, config);
+
   try {
     app.connectMicroservice<MicroserviceOptions>({
       transport: Transport.MQTT,
@@ -37,7 +44,7 @@ async function bootstrap() {
     console.error('Error starting microservice:', error);
   }
 
-  SwaggerModule.setup('api',app, documentFactory);
+  SwaggerModule.setup('api', app, documentFactory);
   await app.listen(3000);
 }
 bootstrap();

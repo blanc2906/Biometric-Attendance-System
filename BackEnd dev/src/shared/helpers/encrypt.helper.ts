@@ -1,4 +1,3 @@
-// src/shared/helpers/encrypt.helper.ts
 import * as crypto from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
